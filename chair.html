@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Logn MUN | Chair</title>
+    <style>
+      /* Matches the same colors, spacing, and typeface as the rest of
+         the site (see delegate.html). */
+      :root {
+        color: #14233b;
+        background: #e8edf4;
+        font-family: Arial, sans-serif;
+      }
+
+      body {
+        margin: 0;
+        padding: 56px 20px;
+        background:
+          linear-gradient(rgb(255 255 255 / 70%), rgb(255 255 255 / 70%)),
+          linear-gradient(90deg, rgb(31 75 153 / 6%) 1px, transparent 1px),
+          linear-gradient(rgb(31 75 153 / 6%) 1px, transparent 1px),
+          #e8edf4;
+        background-size: auto, 36px 36px, 36px 36px, auto;
+      }
+
+      main {
+        max-width: 760px;
+        margin: 0 auto;
+      }
+
+      .card {
+        margin-top: 20px;
+        padding: 28px;
+        background: rgb(255 255 255 / 94%);
+        border: 1px solid #d6dfeb;
+        border-radius: 16px;
+        box-shadow: 0 12px 30px rgb(20 35 59 / 9%);
+      }
+
+      .card:first-child {
+        margin-top: 0;
+      }
+
+      .label {
+        margin: 0 0 4px;
+        color: #52617c;
+        font-size: 0.85rem;
+        font-weight: bold;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+
+      h1 {
+        margin: 0 0 4px;
+        font-size: 1.6rem;
+      }
+
+      h2 {
+        margin: 0 0 14px;
+        font-size: 1.15rem;
+      }
+
+      /* Header row: title on the left, sign-out on the right. */
+      .chair-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+        flex-wrap: wrap;
+      }
+
+      .chair-email {
+        margin: 0;
+        color: #384965;
+        font-size: 0.9rem;
+      }
+
+      /* The chair's current meeting code -- large and spaced out so it's
+         easy to read aloud or glance at while sharing it with delegates. */
+      .session-code-banner {
+        margin: 10px 0 0;
+        padding: 10px 16px;
+        display: inline-flex;
+        align-items: baseline;
+        gap: 10px;
+        background: #eef3ff;
+        border: 1px solid #c7d7f5;
+        border-radius: 8px;
+      }
+
+      .session-code-label {
+        color: #52617c;
+        font-size: 0.8rem;
+        font-weight: bold;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+
+      .session-code {
+        color: #1f4b99;
+        font-size: 1.4rem;
+        font-weight: bold;
+        letter-spacing: 0.12em;
+      }
+
+      button {
+        font: inherit;
+        cursor: pointer;
+      }
+
+      .secondary-button {
+        padding: 9px 14px;
+        color: #1f4b99;
+        background: #ffffff;
+        border: 1px solid #1f4b99;
+        border-radius: 7px;
+        font-weight: bold;
+      }
+
+      .secondary-button:hover {
+        color: #ffffff;
+        background: #1f4b99;
+      }
+
+      .danger-button {
+        padding: 9px 14px;
+        color: #b3261e;
+        background: #ffffff;
+        border: 1px solid #b3261e;
+        border-radius: 7px;
+        font-weight: bold;
+      }
+
+      .danger-button:hover {
+        color: #ffffff;
+        background: #b3261e;
+      }
+
+      .phase-name {
+        margin: 2px 0 10px;
+        font-size: 1.3rem;
+        font-weight: bold;
+      }
+
+      .topic-text {
+        margin: 0 0 16px;
+        color: #384965;
+      }
+
+      /* One button per SDG topic -- the chair clicks one directly to
+         propose it, instead of the site picking at random. Only shown
+         (enabled) during Setting the Agenda. */
+      .topic-choice-list {
+        display: grid;
+        gap: 8px;
+      }
+
+      .topic-choice-button {
+        padding: 10px 14px;
+        text-align: left;
+        color: #14233b;
+        background: #ffffff;
+        border: 1px solid #b9c6d8;
+        border-radius: 8px;
+      }
+
+      .topic-choice-button:hover:not(:disabled) {
+        border-color: #1f4b99;
+        background: #eef3ff;
+      }
+
+      .topic-choice-button.topic-choice-current {
+        border-color: #1f4b99;
+        background: #eef3ff;
+        font-weight: bold;
+      }
+
+      .topic-choice-button:disabled {
+        cursor: not-allowed;
+        opacity: 0.6;
+      }
+
+      .topic-choice-note {
+        margin: 0;
+        color: #52617c;
+        font-size: 0.9rem;
+      }
+
+      .roster-list,
+      .vote-rows {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: grid;
+        gap: 8px;
+      }
+
+      .roster-row,
+      .vote-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 4px 10px;
+        padding: 9px 0;
+        border-bottom: 1px solid #e1e7f0;
+      }
+
+      .roster-row:last-child,
+      .vote-row:last-child {
+        border-bottom: none;
+      }
+
+      .roster-role,
+      .vote-choice {
+        color: #52617c;
+        font-size: 0.9rem;
+        white-space: nowrap;
+      }
+
+      .form-status {
+        min-height: 1.25em;
+        margin: 10px 0 0;
+        color: #52617c;
+        font-size: 0.9rem;
+      }
+
+      .timeline-table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+
+      .timeline-table th,
+      .timeline-table td {
+        padding: 8px 6px;
+        text-align: left;
+        border-bottom: 1px solid #e1e7f0;
+        font-size: 0.9rem;
+      }
+
+      .timeline-table th {
+        color: #52617c;
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+      }
+
+      .timeline-table tr.timeline-current td {
+        font-weight: bold;
+      }
+
+      .timeline-status.timeline-done {
+        color: #1b7a3d;
+      }
+
+      .timeline-status.timeline-active {
+        color: #1f4b99;
+      }
+
+      @media (max-width: 560px) {
+        body {
+          padding: 28px 14px;
+        }
+
+        .card {
+          padding: 20px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <!-- Shown briefly while Firebase checks whether this visitor is
+           actually signed in as the one allowed chair account --
+           chair.js either removes "hidden" from the dashboard below or
+           sends the visitor back to the sign-in page. -->
+      <section class="card" id="chair-checking-card" aria-live="polite">
+        <p class="label">Logn MUN</p>
+        <p>Checking chair sign-in&hellip;</p>
+      </section>
+
+      <div id="chair-dashboard" hidden>
+        <section class="card chair-header" aria-labelledby="chair-heading">
+          <div>
+            <p class="label">Logn MUN</p>
+            <h1 id="chair-heading">Chair Dashboard</h1>
+            <p class="chair-email" id="chair-email"></p>
+            <p class="session-code-banner">
+              <span class="session-code-label">Meeting Code</span>
+              <span class="session-code" id="chair-session-code"></span>
+            </p>
+          </div>
+          <button class="secondary-button" id="sign-out-button" type="button">Sign Out</button>
+        </section>
+
+        <!-- Current phase/topic, and -- only during Setting the Agenda
+             -- a direct way to pick the topic instead of letting the
+             site propose one at random. -->
+        <section class="card" aria-labelledby="topic-heading">
+          <h2 id="topic-heading">Phase &amp; Topic</h2>
+          <p class="label" id="chair-phase-step">Phase 1 of 8</p>
+          <p class="phase-name" id="chair-phase-name">Setting the Agenda</p>
+          <p class="topic-text" id="chair-topic-text"></p>
+
+          <div id="topic-choice-list" class="topic-choice-list"></div>
+          <p class="topic-choice-note" id="topic-choice-note" hidden>
+            Choosing a topic is only available during Setting the Agenda.
+          </p>
+          <p class="form-status" id="topic-choice-status" aria-live="polite"></p>
+        </section>
+
+        <!-- Only shown during Yield Time -- who's already yielded,
+             who's speaking now, and who's still waiting, so the chair
+             knows exactly who to call on next. -->
+        <section class="card" id="chair-yield-card" aria-labelledby="chair-yield-heading" hidden>
+          <h2 id="chair-yield-heading">Queue Order</h2>
+          <ul class="roster-list" id="chair-yield-order-list"></ul>
+        </section>
+
+        <!-- A simple read-only view of the current vote -- the chair
+             doesn't vote, so there are no buttons here, just status. -->
+        <section class="card" aria-labelledby="vote-heading">
+          <h2 id="vote-heading">Live Vote Status</h2>
+          <p class="form-status" id="chair-vote-summary" aria-live="polite"></p>
+          <ul class="vote-rows" id="chair-vote-rows"></ul>
+        </section>
+
+        <!-- Who's running which country this session, and whether a
+             human seat has been claimed by a delegate yet. -->
+        <section class="card" aria-labelledby="roster-heading">
+          <h2 id="roster-heading">Delegate Roster</h2>
+          <ul class="roster-list" id="roster-list"></ul>
+        </section>
+
+        <!-- Same procedure timeline the delegate page shows. -->
+        <section class="card" aria-labelledby="timeline-heading">
+          <h2 id="timeline-heading">Conference Timeline</h2>
+          <table class="timeline-table">
+            <thead>
+              <tr>
+                <th>Phase</th>
+                <th>What happens</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="chair-timeline-body"></tbody>
+          </table>
+        </section>
+
+        <!-- Chair-only, and irreversible -- this used to be a button any
+             delegate could click on the committee page; it now lives
+             only here, since this dashboard is gated to the one signed-in
+             chair account. -->
+        <section class="card" aria-labelledby="session-controls-heading">
+          <h2 id="session-controls-heading">Session Controls</h2>
+          <p class="topic-choice-note">
+            Restarts the committee from Setting the Agenda with a fresh random AI/Human split, and clears every vote and delegate assignment. This can't be undone.
+          </p>
+          <button class="danger-button" id="reset-session-button" type="button">Reset Committee Session</button>
+          <p class="form-status" id="reset-session-status" aria-live="polite"></p>
+        </section>
+      </div>
+    </main>
+    <script type="module" src="chair.js"></script>
+  </body>
+</html>

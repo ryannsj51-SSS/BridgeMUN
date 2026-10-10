@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Logn MUN | Enter Meeting Code</title>
+    <style>
+      /* Matches the same colors, spacing, and typeface as the rest of
+         the site (see join.html, index.html). */
+      :root {
+        color: #14233b;
+        background: #e8edf4;
+        font-family: Arial, sans-serif;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        padding: 56px 20px;
+        box-sizing: border-box;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background:
+          linear-gradient(rgb(255 255 255 / 70%), rgb(255 255 255 / 70%)),
+          linear-gradient(90deg, rgb(31 75 153 / 6%) 1px, transparent 1px),
+          linear-gradient(rgb(31 75 153 / 6%) 1px, transparent 1px),
+          #e8edf4;
+        background-size: auto, 36px 36px, 36px 36px, auto;
+      }
+
+      main {
+        width: 100%;
+        max-width: 420px;
+      }
+
+      .card {
+        padding: clamp(28px, 6vw, 44px);
+        background: rgb(255 255 255 / 94%);
+        border: 1px solid #d6dfeb;
+        border-radius: 16px;
+        box-shadow: 0 12px 30px rgb(20 35 59 / 9%);
+        text-align: center;
+      }
+
+      .label {
+        margin: 0 0 4px;
+        color: #52617c;
+        font-size: 0.85rem;
+        font-weight: bold;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+
+      h1 {
+        margin: 0 0 8px;
+        font-size: 1.5rem;
+      }
+
+      .subtitle {
+        margin: 0 0 28px;
+        color: #384965;
+      }
+
+      /* A large, spaced-out input for a 6-digit code -- easy to read
+         what's been typed, matching how the code itself is displayed on
+         the chair dashboard. */
+      #code-input {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 14px;
+        font: inherit;
+        font-size: 1.5rem;
+        font-weight: bold;
+        text-align: center;
+        letter-spacing: 0.3em;
+        color: #14233b;
+        background: #ffffff;
+        border: 1px solid #b9c6d8;
+        border-radius: 10px;
+      }
+
+      #code-input:focus {
+        outline: none;
+        border-color: #1f4b99;
+      }
+
+      button {
+        font: inherit;
+        cursor: pointer;
+      }
+
+      .join-submit {
+        width: 100%;
+        box-sizing: border-box;
+        margin-top: 14px;
+        padding: 14px 18px;
+        color: #ffffff;
+        background: #1f4b99;
+        border: 1px solid #1f4b99;
+        border-radius: 10px;
+        font-weight: bold;
+        font-size: 1rem;
+      }
+
+      .join-submit:hover:not(:disabled) {
+        background: #163a7a;
+      }
+
+      .join-submit:disabled {
+        cursor: not-allowed;
+        opacity: 0.65;
+      }
+
+      .join-code-status {
+        min-height: 1.25em;
+        margin: 14px 0 0;
+        color: #b3261e;
+        font-size: 0.9rem;
+      }
+
+      .back-link {
+        display: inline-block;
+        margin-top: 18px;
+        color: #52617c;
+        font-size: 0.9rem;
+        text-decoration: none;
+      }
+
+      .back-link:hover {
+        text-decoration: underline;
+      }
+
+      @media (max-width: 420px) {
+        .card {
+          padding: 24px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section class="card" aria-labelledby="join-code-heading">
+        <p class="label">Logn MUN</p>
+        <h1 id="join-code-heading">Enter Meeting Code</h1>
+        <p class="subtitle">Ask your chair for the 6-digit code they were given.</p>
+
+        <!-- Validated against the chair's actual current session (see
+             joinSessionByCode in committee-data.js) before this visitor
+             is ever let onto the committee page itself. -->
+        <form id="join-code-form">
+          <input
+            type="text"
+            id="code-input"
+            name="code"
+            inputmode="numeric"
+            pattern="[0-9]{6}"
+            maxlength="6"
+            autocomplete="off"
+            placeholder="000000"
+            aria-label="6-digit meeting code"
+            required
+          />
+          <button class="join-submit" type="submit">Join Committee</button>
+        </form>
+
+        <p class="join-code-status" id="join-code-status" aria-live="polite"></p>
+        <a class="back-link" href="join.html">← Back</a>
+      </section>
+    </main>
+    <script type="module" src="join-code.js"></script>
+  </body>
+</html>

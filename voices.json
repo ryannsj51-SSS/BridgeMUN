@@ -1,0 +1,25 @@
+{
+  "_instructions": "Fill in real ElevenLabs voice_id values below (Voice Library tab in your ElevenLabs account, or your own saved Voices -- copy the voice_id shown for each one). 'default' is used when a visitor leaves the accent checkbox off, so pick one neutral-sounding voice per gender there. 'accented' is used only when a visitor turns the accent checkbox on for that specific country -- leave any value as an empty string until you've picked a voice for it, and the server will fall back to the matching 'default' gender voice instead.",
+  "default": {
+    "female": "hpp4J3VqNfWAUOO0d1Us",
+    "male": "CwhRBWXzGAHq8TQ4Fs17"
+  },
+  "accented": {
+    "United States": {
+      "female": "hpp4J3VqNfWAUOO0d1Us",
+      "male": "CwhRBWXzGAHq8TQ4Fs17"
+    },
+    "Philippines": {
+      "female": "6LXO12QQcaZd6xGp9UIZ",
+      "male": "PiQLVEam6pJlsKPO90Ol"
+    },
+    "Netherlands": {
+      "female": "D6MRWCKoavI2xUJXmaCb",
+      "male": "gdTrLNuwWUaxC0z5n1j7"
+    },
+    "China": {
+      "female": "YxbjaPemDJV2xlfvkiIG",
+      "male": "agczkAUlHLowaNnL72Cc"
+    }
+  }
+}

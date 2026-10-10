@@ -1,0 +1,40 @@
+prompt: before making changes to the software itself,  I want to make a sample MUN conference based on the SDG #14 life on water. The three delegates are USA, Phillipines, and Netherlands. explain what each country wants the international society to do according to the status quo and the burden each nation has to defend
+response: Since the site's current committee (UN Security Council, "Regulation of Autonomous Weapons") already follows a status-quo → position → discussion format, here's a matching sample for an SDG 14 (Life Below Water) committee with USA, Philippines, and Netherlands as delegates.
+
+United States
+
+The status quo is a country that acts like a leading ocean power without being one on paper: the U.S. runs the world's largest maritime economy and one of its largest EEZs, funds NOAA's marine science and fisheries management, and treats the Magnuson-Stevens Act as a model for sustainable domestic fisheries. It backs IUU-fishing enforcement (largely aimed at distant-water fleets like China's), supports the newly-enforced WTO Agreement on Fisheries Subsidies, and prefers voluntary conservation pledges like the 30x30 Global Ocean Alliance over binding new bodies.
+
+What the U.S. wants from the international community: tougher port-state and satellite-tracking enforcement against IUU fishing, continued freedom of navigation without expansive coastal-state claims choking off EEZs, and a "blue economy" approach built on tech and public-private investment rather than a strong central regulator.
+
+The burden the delegate has to defend: the U.S. has never ratified UNCLOS — the very treaty underpinning ocean law — despite invoking it constantly and enforcing freedom of navigation on customary-law grounds alone. It also authorizes seabed mining licensing under a 1980 domestic law outside the International Seabed Authority's framework, which sits awkwardly next to any US lecture on rules-based ocean governance.
+
+Philippines
+
+The status quo: an archipelagic nation of over 7,600 islands sitting in the Coral Triangle, one of the most biodiverse marine regions on Earth, with millions of people dependent on fishing for food and income. The Philippines ratified UNCLOS and the BBNJ high seas treaty, and won the landmark 2016 Permanent Court of Arbitration ruling that struck down China's nine-dash-line claim and affirmed Philippine fishing rights around Scarborough Shoal — a case the delegate can lean on heavily as precedent for a rules-based maritime order.
+
+What it wants from the international community: real enforcement teeth behind arbitral rulings (not just moral victories), climate adaptation financing for low-lying coastal communities, technology and funding transfers for marine protected area management, and stronger multilateral pressure against foreign fleets encroaching on its EEZ.
+
+The burden to defend: the Philippines' own domestic record is uneven — coral reef degradation, a history of blast and cyanide fishing, and rivers (the Pasig among them) that rank among the world's largest sources of ocean plastic. There's also tension in demanding a rules-based order abroad while depending heavily on the U.S. and Japan for the naval capacity to actually enforce its own maritime claims.
+
+Netherlands
+
+The status quo: a country literally below sea level, a global leader in water engineering (the Delta Works), and home to Rotterdam, one of Europe's busiest ports. It hosts the ICJ and the Permanent Court of Arbitration in The Hague — the very body that ruled in the Philippines' favor — and is home to organizations like The Ocean Cleanup working on riverine plastic interception. The Netherlands ratified BBNJ, follows the EU Marine Strategy Framework Directive, and is aggressively expanding North Sea offshore wind.
+
+What it wants from the international community: fast, full implementation of BBNJ and a strong Global Plastics Treaty, expanded marine protected area networks, and coordinated "blue economy" transitions that let renewable energy and biodiversity protection coexist rather than compete for the same water.
+
+The burden to defend: Dutch and EU fishing fleets have faced real criticism for bottom trawling in sensitive North Sea habitats, its rapid offshore wind buildout is itself contested by fishing communities and conservationists, and Dutch/EU nitrogen runoff continues to drive eutrophication in the Wadden Sea — undercutting the country's polished reputation as the world's water-management expert.
+
+If it's useful, I can turn this into actual seed content next — matching the delegate-list and discussion-feed structure already in index.html/committee.js — once you're ready to start on the software side.
+
+prompt:before moving on to the actually UI/UX part of the website. let's change the topic for the conference. based on the previous chat above change the topic AI delegates in the conference. AI delegates can be random.  the AI delegate's speech should be according to what the previous chat has said.
+
+prompt: research and add one more AI delegate country to the committee, following the same structure (status quo, what it wants, the burden to defend) as the United States, Philippines, and Netherlands above.
+response:
+China
+
+The status quo: China operates the world's largest distant-water fishing fleet, with U.S. congressional investigators counting roughly 16,000 vessels operating across the globe, and its seafood processing industry sits at the center of global supply chains. Domestically, China has taken real unilateral conservation steps, including a ten-year fishing moratorium on the Yangtze River (2020) to protect freshwater biodiversity and seasonal fishing closures in its own coastal waters. China is a WTO member and engages with the new WTO Agreement on Fisheries Subsidies, particularly its special and differential treatment provisions for developing-country fleets. In the South China Sea, China continues to assert historic fishing and resource rights under its "nine-dash line," a claim the 2016 Permanent Court of Arbitration ruling (brought by the Philippines) found to have no legal basis -- a ruling China has never accepted.
+
+What it wants from the international community: recognition that developing coastal states have the same right to build a blue economy as long-established naval and fishing powers, continued special and differential treatment for developing-country fleets under global fisheries-subsidy rules, and international cooperation on ocean conservation that does not single out China's fleet while other major fishing nations' practices go unexamined.
+
+The burden to defend: a U.S. congressional committee has labeled China's distant-water fleet the world's largest perpetrator of illegal, unreported, and unregulated (IUU) fishing, and investigations (including by the Outlaw Ocean Project) have documented forced-labor conditions aboard some vessels. China also continues to reject the 2016 arbitral ruling on the South China Sea despite invoking international law elsewhere -- a direct tension with the Philippines' position in this same committee.

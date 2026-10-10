@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Logn MUN | Home</title>
+    <style>
+      /* Matches the same colors, spacing, and typeface as the rest of
+         the site (see join.html, delegate.html). */
+      :root {
+        color: #14233b;
+        background: #e8edf4;
+        font-family: Arial, sans-serif;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        padding: 56px 20px;
+        box-sizing: border-box;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background:
+          linear-gradient(rgb(255 255 255 / 70%), rgb(255 255 255 / 70%)),
+          linear-gradient(90deg, rgb(31 75 153 / 6%) 1px, transparent 1px),
+          linear-gradient(rgb(31 75 153 / 6%) 1px, transparent 1px),
+          #e8edf4;
+        background-size: auto, 36px 36px, 36px 36px, auto;
+      }
+
+      main {
+        width: 100%;
+        max-width: 560px;
+      }
+
+      .card {
+        padding: clamp(28px, 6vw, 48px);
+        background: rgb(255 255 255 / 94%);
+        border: 1px solid #d6dfeb;
+        border-radius: 16px;
+        box-shadow: 0 12px 30px rgb(20 35 59 / 9%);
+        text-align: center;
+      }
+
+      .label {
+        margin: 0 0 4px;
+        color: #52617c;
+        font-size: 0.85rem;
+        font-weight: bold;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+
+      h1 {
+        margin: 0 0 14px;
+        font-size: 2rem;
+      }
+
+      .intro {
+        margin: 0 0 32px;
+        color: #384965;
+        font-size: 1.02rem;
+        line-height: 1.55;
+      }
+
+      button,
+      a.hero-button {
+        font: inherit;
+        cursor: pointer;
+      }
+
+      .hero-buttons {
+        display: grid;
+        gap: 14px;
+      }
+
+      /* Shared base look for both hero buttons -- Join is picked out
+         with a filled background, matching the chair button style on
+         join.html so the site's "primary action" color stays consistent. */
+      .hero-button {
+        display: block;
+        padding: 16px 18px;
+        border-radius: 10px;
+        font-weight: bold;
+        font-size: 1rem;
+        text-decoration: none;
+        box-sizing: border-box;
+      }
+
+      .join-button {
+        color: #ffffff;
+        background: #1f4b99;
+        border: 1px solid #1f4b99;
+      }
+
+      .join-button:hover {
+        background: #163a7a;
+      }
+
+      .feedback-button {
+        color: #1f4b99;
+        background: #ffffff;
+        border: 1px solid #1f4b99;
+      }
+
+      .feedback-button:hover {
+        color: #ffffff;
+        background: #1f4b99;
+      }
+
+      @media (max-width: 420px) {
+        .card {
+          padding: 24px;
+        }
+
+        h1 {
+          font-size: 1.6rem;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section class="card" aria-labelledby="hero-heading">
+        <p class="label">Logn MUN</p>
+        <h1 id="hero-heading">Model UN, practiced live</h1>
+        <p class="intro">
+          Run a full Model UN committee session right in the browser -- real procedure, live voting, a shared draft
+          resolution, and AI Delegates filling in any country's seat nobody claims. One chair, any number of
+          delegates, no setup beyond a meeting code.
+        </p>
+
+        <div class="hero-buttons">
+          <!-- The main entry point: choosing to sign in as chair or join
+               as a delegate happens on the next page (join.html). -->
+          <a class="hero-button join-button" id="join-button" href="join.html">Join</a>
+          <!-- Open to anyone, joined or not -- leaving feedback on the
+               site itself, separate from any one committee session. -->
+          <a class="hero-button feedback-button" id="feedback-button" href="community.html">Share Your Experience</a>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

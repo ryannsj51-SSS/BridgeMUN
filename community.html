@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Logn MUN | Community Feedback</title>
+    <style>
+      /* Creates a focused, professional feedback page matching the committee design. */
+      :root {
+        color: #14233b;
+        background: #e8edf4;
+        font-family: Arial, sans-serif;
+      }
+
+      body {
+        margin: 0;
+        padding: 56px 20px;
+        background:
+          linear-gradient(rgb(255 255 255 / 70%), rgb(255 255 255 / 70%)),
+          linear-gradient(90deg, rgb(31 75 153 / 6%) 1px, transparent 1px),
+          linear-gradient(rgb(31 75 153 / 6%) 1px, transparent 1px),
+          #e8edf4;
+        background-size: auto, 36px 36px, 36px 36px, auto;
+      }
+
+      main {
+        max-width: 700px;
+        margin: 0 auto;
+      }
+
+      /* Holds the feedback form in a calm, readable panel. */
+      .feedback-card {
+        padding: clamp(28px, 6vw, 48px);
+        background: rgb(255 255 255 / 94%);
+        border: 1px solid #d6dfeb;
+        border-radius: 16px;
+        box-shadow: 0 12px 30px rgb(20 35 59 / 9%);
+      }
+
+      .eyebrow {
+        margin: 0 0 8px;
+        color: #1f4b99;
+        font-size: 0.85rem;
+        font-weight: bold;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        margin: 0;
+        font-family: Georgia, serif;
+        font-size: clamp(2rem, 5vw, 3rem);
+        letter-spacing: -0.03em;
+      }
+
+      .intro {
+        margin: 14px 0 28px;
+        color: #52617c;
+        line-height: 1.6;
+      }
+
+      /* Keeps each form control clear and easy to use. */
+      form {
+        display: grid;
+        gap: 12px;
+      }
+
+      label {
+        color: #384965;
+        font-size: 0.9rem;
+        font-weight: bold;
+      }
+
+      textarea {
+        box-sizing: border-box;
+        width: 100%;
+        min-height: 170px;
+        padding: 12px;
+        color: #14233b;
+        background: #ffffff;
+        border: 1px solid #b9c6d8;
+        border-radius: 8px;
+        font: inherit;
+        resize: vertical;
+      }
+
+      button,
+      .back-link {
+        display: inline-block;
+        box-sizing: border-box;
+        padding: 11px 16px;
+        border-radius: 7px;
+        font: inherit;
+        font-weight: bold;
+      }
+
+      button {
+        width: fit-content;
+        color: #ffffff;
+        background: #1f4b99;
+        border: 0;
+        cursor: pointer;
+      }
+
+      button:not(:disabled):hover {
+        background: #163b7c;
+      }
+
+      button:disabled {
+        cursor: not-allowed;
+        opacity: 0.65;
+      }
+
+      textarea:focus-visible,
+      button:focus-visible,
+      .back-link:focus-visible {
+        outline: 3px solid #8bb5ff;
+        outline-offset: 2px;
+      }
+
+      .status {
+        min-height: 1.25em;
+        margin: 0;
+        color: #52617c;
+      }
+
+      .back-link {
+        margin-top: 24px;
+        color: #1f4b99;
+        text-decoration: none;
+      }
+
+      .back-link:hover {
+        text-decoration: underline;
+      }
+
+      /* Highlights the link to the public community opinions page. */
+      .opinions-link {
+        display: inline-block;
+        margin-top: 20px;
+        padding: 11px 16px;
+        color: #1f4b99;
+        border: 1px solid #1f4b99;
+        border-radius: 7px;
+        font-weight: bold;
+        text-decoration: none;
+      }
+
+      .opinions-link:hover {
+        color: #ffffff;
+        background: #1f4b99;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <!-- Collects private suggestions for improving the Logn MUN experience. -->
+      <section class="feedback-card" aria-labelledby="feedback-heading">
+        <p class="eyebrow">Logn MUN Community</p>
+        <h1 id="feedback-heading">Share your experiences</h1>
+        <p class="intro">
+          Tell us what worked well, what could improve, or what would make your MUN experience better.
+        </p>
+        <form id="feedback-form">
+          <label for="feedback">Your feedback</label>
+          <textarea
+            id="feedback"
+            name="feedback"
+            maxlength="1000"
+            placeholder="Write your feedback here…"
+            required
+          ></textarea>
+          <button type="submit">Send Feedback</button>
+          <p class="status" id="feedback-status" aria-live="polite"></p>
+        </form>
+        <!-- Opens the public page where community feedback can be read. -->
+        <a class="opinions-link" href="opinions.html">Read community opinions</a>
+        <a class="back-link" href="delegate.html">← Back to committee</a>
+      </section>
+    </main>
+    <script type="module" src="community.js"></script>
+  </body>
+</html>

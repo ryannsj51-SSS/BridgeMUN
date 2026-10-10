@@ -1,0 +1,894 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Logn MUN | Delegate</title>
+    <style>
+      /* Sets the overall page colors, spacing, and readable typeface. */
+      :root {
+        color: #14233b;
+        background: #e8edf4;
+        font-family: Arial, sans-serif;
+      }
+
+      /* Adds a quiet map-grid background behind the conference content. */
+      body {
+        margin: 0;
+        padding: 56px 20px;
+        background:
+          linear-gradient(rgb(255 255 255 / 70%), rgb(255 255 255 / 70%)),
+          linear-gradient(90deg, rgb(31 75 153 / 6%) 1px, transparent 1px),
+          linear-gradient(rgb(31 75 153 / 6%) 1px, transparent 1px),
+          #e8edf4;
+        background-size: auto, 36px 36px, 36px 36px, auto;
+      }
+
+      main {
+        max-width: 1120px;
+        margin: 0 auto;
+      }
+
+      /* The main two-column layout: a wide main column for everything
+         delegates actually DO (vote, speak, draft, discuss) and a
+         narrow sidebar for Queue Order and the Conference Timeline --
+         useful reference while something else is happening, but not
+         the main part of the page, so it stays small rather than
+         splitting the page in half. */
+      .layout-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 300px;
+        gap: 20px;
+        align-items: start;
+      }
+
+      .layout-main {
+        min-width: 0;
+      }
+
+      .layout-sidebar {
+        display: grid;
+        gap: 20px;
+        /* Stays in view while scrolling through the longer main column
+           on screens wide enough to have room for it. */
+        position: sticky;
+        top: 20px;
+      }
+
+      /* Every card already gets its own margin-top for vertical
+         spacing in a single column -- without this, the first card in
+         each column would carry that same gap, making the two columns
+         start at visibly different heights. */
+      .layout-main > .card:first-child,
+      .layout-sidebar > .card:first-child {
+        margin-top: 0;
+      }
+
+      /* Narrow screens stack the sidebar below the main column instead
+         of squeezing both into one cramped width. */
+      @media (max-width: 860px) {
+        .layout-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .layout-sidebar {
+          position: static;
+        }
+      }
+
+      /* A clear, impossible-to-miss notice when this visitor is watching
+         as an observer instead of an assigned delegate. */
+      .observer-banner {
+        margin: 0 0 20px;
+        padding: 14px 18px;
+        color: #7a4a00;
+        background: #fff3d6;
+        border: 1px solid #f0c674;
+        border-radius: 10px;
+        font-weight: bold;
+        text-align: center;
+      }
+
+      /* Presents each area as a clean white card. */
+      .card {
+        margin-top: 20px;
+        padding: 28px;
+        background: rgb(255 255 255 / 94%);
+        border: 1px solid #d6dfeb;
+        border-radius: 16px;
+        box-shadow: 0 12px 30px rgb(20 35 59 / 9%);
+      }
+
+      /* Gives the committee heading a formal, high-contrast conference style. */
+      .committee-hero {
+        position: relative;
+        isolation: isolate;
+        min-height: 174px;
+        overflow: hidden;
+        padding: 42px;
+        color: #ffffff;
+        background: linear-gradient(125deg, #0b2347, #1f4b99);
+        border: 0;
+      }
+
+      .committee-hero::after {
+        position: absolute;
+        z-index: -1;
+        right: 42px;
+        bottom: -98px;
+        width: 270px;
+        height: 270px;
+        content: "";
+        border: 1px solid rgb(255 255 255 / 38%);
+        border-radius: 50%;
+        background:
+          repeating-linear-gradient(0deg, transparent 0 26px, rgb(255 255 255 / 20%) 27px 28px),
+          repeating-linear-gradient(90deg, transparent 0 38px, rgb(255 255 255 / 20%) 39px 40px);
+        box-shadow: inset 0 0 0 28px rgb(255 255 255 / 4%);
+      }
+
+      h1,
+      h2,
+      p {
+        margin-top: 0;
+      }
+
+      h1 {
+        margin-bottom: 8px;
+        font-family: Georgia, serif;
+        font-size: clamp(2rem, 5vw, 3rem);
+        letter-spacing: -0.03em;
+      }
+
+      h2 {
+        margin-bottom: 10px;
+        font-size: 1.2rem;
+      }
+
+      .label {
+        margin-bottom: 6px;
+        color: #5a6780;
+        font-size: 0.85rem;
+        font-weight: bold;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .committee-hero .label {
+        color: #b9d4ff;
+      }
+
+      .topic {
+        margin-bottom: 0;
+        font-size: 1.1rem;
+        line-height: 1.5;
+      }
+
+      /* Shows the current MUN procedure phase and the vote to advance it. */
+      .phase-name {
+        margin-bottom: 12px;
+        font-family: Georgia, serif;
+        font-size: 1.6rem;
+      }
+
+      .vote-question {
+        margin-bottom: 12px;
+        font-weight: bold;
+      }
+
+      .vote-rows {
+        display: grid;
+        gap: 10px;
+        margin-bottom: 12px;
+      }
+
+      .vote-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px 16px;
+        padding: 12px 16px;
+        background: #f4f7fb;
+        border: 1px solid #e1e7f0;
+        border-radius: 10px;
+      }
+
+      .vote-choice {
+        color: #52617c;
+        font-size: 0.92rem;
+        font-weight: bold;
+      }
+
+      .vote-button-group {
+        display: flex;
+        gap: 8px;
+      }
+
+      .vote-button {
+        padding: 7px 16px;
+        color: #ffffff;
+        border: 0;
+        border-radius: 7px;
+        font: inherit;
+        font-size: 0.85rem;
+        font-weight: bold;
+        cursor: pointer;
+      }
+
+      .vote-yes {
+        background: #1f8a4c;
+      }
+
+      .vote-yes:hover {
+        background: #166b3a;
+      }
+
+      .vote-no {
+        background: #b3261e;
+      }
+
+      .vote-no:hover {
+        background: #8f1e18;
+      }
+
+      /* Gray = Abstain, only used on the Signing vote where abstaining
+         is allowed (every earlier phase is Yes/No only). */
+      .vote-abstain {
+        background: #52617c;
+      }
+
+      .vote-abstain:hover {
+        background: #3f4b60;
+      }
+
+      /* The 60-second Setting the Agenda countdown -- a warmer color than
+         the other labels so it reads as time-sensitive. */
+      .topic-vote-timer {
+        color: #b3261e;
+      }
+
+      /* Wraps the "vote anonymously" checkbox above the Agree/Disagree
+         buttons during Setting the Agenda. */
+      .vote-topic-controls {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 6px;
+      }
+
+      .anonymous-toggle {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        color: #5a6780;
+        font-size: 0.8rem;
+        cursor: pointer;
+      }
+
+      .anonymous-toggle input {
+        margin: 0;
+        cursor: pointer;
+      }
+
+      .procedure-actions {
+        display: flex;
+        gap: 10px;
+        margin-top: 4px;
+      }
+
+      .secondary-button {
+        padding: 9px 14px;
+        color: #1f4b99;
+        background: #eef3fb;
+        border: 1px solid #c7d5ea;
+        border-radius: 7px;
+        font: inherit;
+        font-weight: bold;
+        cursor: pointer;
+      }
+
+      .secondary-button:hover {
+        background: #dde8f8;
+      }
+
+      /* Table listing every MUN procedure phase, always visible, with a
+         checkmark for each phase already completed. */
+      .timeline-table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+
+      .timeline-table th,
+      .timeline-table td {
+        padding: 7px 8px;
+        text-align: left;
+        vertical-align: top;
+        border-bottom: 1px solid #e1e7f0;
+        font-size: 0.8rem;
+        line-height: 1.3;
+      }
+
+      .timeline-table th {
+        color: #5a6780;
+        font-size: 0.68rem;
+        font-weight: bold;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+      }
+
+      .timeline-table tr.timeline-current {
+        background: #f4f7fb;
+      }
+
+      .timeline-status {
+        white-space: nowrap;
+        font-weight: bold;
+      }
+
+      .timeline-status.timeline-done {
+        color: #1f8a4c;
+      }
+
+      .timeline-status.timeline-active {
+        color: #1f4b99;
+      }
+
+      /* Pop-up banner announcing a new phase. Fixed to the top of the
+         screen and faded in/out rather than shown or hidden abruptly. */
+      .phase-toast {
+        position: fixed;
+        top: 20px;
+        left: 50%;
+        z-index: 1000;
+        padding: 14px 22px;
+        color: #ffffff;
+        background: linear-gradient(125deg, #0b2347, #1f4b99);
+        border-radius: 10px;
+        box-shadow: 0 12px 30px rgb(20 35 59 / 25%);
+        font-weight: bold;
+        opacity: 0;
+        transform: translate(-50%, -16px);
+        transition: opacity 0.25s ease, transform 0.25s ease;
+        pointer-events: none;
+      }
+
+      .phase-toast.phase-toast-visible {
+        opacity: 1;
+        transform: translate(-50%, 0);
+      }
+
+      /* Shared bar-chart styling for both the Roll Call Results chart
+         (Voting / Not Voting) and the live Vote Status chart (one bar
+         per vote choice, plus Not Yet Voted): a track, a colored fill
+         sized to its share of all delegates, and the names in it. */
+      .roll-call-chart {
+        display: grid;
+        gap: 16px;
+      }
+
+      .roll-call-row {
+        display: grid;
+        gap: 5px;
+      }
+
+      .roll-call-row-header {
+        display: flex;
+        justify-content: space-between;
+        color: #384965;
+        font-size: 0.9rem;
+        font-weight: bold;
+      }
+
+      .roll-call-track {
+        height: 22px;
+        overflow: hidden;
+        background: #eef1f6;
+        border-radius: 4px;
+      }
+
+      .roll-call-fill {
+        height: 100%;
+        border-radius: 4px;
+        transition: width 0.3s ease;
+      }
+
+      .roll-call-fill.voting {
+        background: #1f8a4c;
+      }
+
+      .roll-call-fill.not-voting {
+        background: #b3261e;
+      }
+
+      .roll-call-names {
+        margin: 0;
+        color: #52617c;
+        font-size: 0.85rem;
+      }
+
+      /* Reused by the live Vote Status chart for whichever delegates
+         haven't cast a vote yet in the current phase -- a light neutral
+         so it reads as "not decided" rather than a real vote choice. */
+      .roll-call-fill.vote-pending {
+        background: #c7cedb;
+      }
+
+      /* Displays the delegates in simple, evenly spaced rows. */
+      .delegate-list {
+        display: grid;
+        gap: 10px;
+        padding: 0;
+        margin-bottom: 0;
+        list-style: none;
+      }
+
+      .delegate {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        gap: 8px 16px;
+        padding: 14px 16px;
+        background: #f4f7fb;
+        border: 1px solid #e1e7f0;
+        border-radius: 10px;
+      }
+
+      .role {
+        flex: 0 0 auto;
+        color: #52617c;
+        font-size: 0.92rem;
+      }
+
+      /* The Yield Time speaking order -- same row look as the delegate
+         list, but the delegate currently holding the floor is picked
+         out with a highlighted border. */
+      .yield-order-list {
+        display: grid;
+        gap: 10px;
+        padding: 0;
+        margin: 0 0 16px;
+        list-style: none;
+      }
+
+      .yield-order-row {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        gap: 8px 16px;
+        padding: 14px 16px;
+        background: #f4f7fb;
+        border: 1px solid #e1e7f0;
+        border-radius: 10px;
+      }
+
+      .yield-order-row.yield-order-current {
+        background: #eef3ff;
+        border-color: #1f4b99;
+      }
+
+      /* Picks out THIS visitor's own row in the queue with a left
+         accent bar, so they don't have to scan all 7 rows to find
+         themselves every time the queue updates. Combines with
+         .yield-order-current above when it's both their row and their
+         turn (the accent bar plus the filled highlight). */
+      .yield-order-row.yield-order-mine {
+        border-left: 4px solid #1f4b99;
+      }
+
+      .yield-order-status {
+        flex: 0 0 auto;
+        color: #52617c;
+        font-size: 0.92rem;
+      }
+
+      /* Groups the discussion messages with consistent vertical spacing. */
+      .discussion-area {
+        display: grid;
+        gap: 12px;
+      }
+
+      /* Keeps each discussion message easy to scan. */
+      .message {
+        padding: 16px;
+        background: #f7f9fc;
+        border: 1px solid #e1e7f0;
+        border-left: 4px solid #1f4b99;
+        border-radius: 10px;
+      }
+
+      .message-country,
+      .message-type {
+        display: block;
+      }
+
+      .message-country {
+        font-weight: bold;
+      }
+
+      .message-type {
+        margin-top: 4px;
+        color: #52617c;
+        font-size: 0.9rem;
+      }
+
+      .message-text {
+        margin: 12px 0 0;
+      }
+
+      /* Lets a visitor choose which delegate, voice gender, and accent
+         setting to use before generating that delegate's AI speech audio. */
+      .speech-controls {
+        display: grid;
+        gap: 10px;
+        margin-bottom: 16px;
+      }
+
+      .checkbox-label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 2px 0 6px;
+        color: #384965;
+        font-size: 0.9rem;
+      }
+
+      .checkbox-label input {
+        width: 16px;
+        height: 16px;
+      }
+
+      /* Row of small controls under an AI Delegate's message so its
+         generated speech audio can be paused and resumed, not just played
+         once straight through. */
+      .audio-controls {
+        display: flex;
+        gap: 8px;
+        margin-top: 12px;
+      }
+
+      .audio-control-button {
+        padding: 7px 12px;
+        color: #1f4b99;
+        background: #eef3fb;
+        border: 1px solid #c7d5ea;
+        border-radius: 7px;
+        font: inherit;
+        font-size: 0.85rem;
+        font-weight: bold;
+        cursor: pointer;
+      }
+
+      .audio-control-button:hover {
+        background: #dde8f8;
+      }
+
+      /* Styles the control that adds the mock AI opening speech. */
+      .ai-speech-button,
+      .primary-button {
+        margin-bottom: 16px;
+        padding: 11px 16px;
+        color: #ffffff;
+        background: #1f4b99;
+        border: 0;
+        border-radius: 7px;
+        font: inherit;
+        font-weight: bold;
+        cursor: pointer;
+      }
+
+      .ai-speech-button:not(:disabled):hover,
+      .primary-button:not(:disabled):hover {
+        background: #163b7c;
+      }
+
+      /* Makes the button state visually clear after its one permitted use. */
+      .ai-speech-button:disabled,
+      .primary-button:disabled {
+        cursor: not-allowed;
+        opacity: 0.65;
+      }
+
+      /* Makes the message form match the rest of the committee interface. */
+      .message-form {
+        display: grid;
+        gap: 12px;
+        margin-top: 20px;
+        padding-top: 20px;
+        border-top: 1px solid #e1e7f0;
+      }
+
+      .form-label {
+        color: #384965;
+        font-size: 0.9rem;
+        font-weight: bold;
+      }
+
+      select,
+      textarea {
+        box-sizing: border-box;
+        width: 100%;
+        padding: 11px 12px;
+        color: #14233b;
+        background: #ffffff;
+        border: 1px solid #b9c6d8;
+        border-radius: 8px;
+        font: inherit;
+      }
+
+      textarea {
+        min-height: 100px;
+        resize: vertical;
+      }
+
+      /* The read-only display of which country this delegate was
+         assigned, replacing what used to be a free-pick select. */
+      .my-country {
+        margin: 0;
+        padding: 11px 12px;
+        color: #14233b;
+        font-weight: bold;
+        background: #eef1f6;
+        border: 1px solid #b9c6d8;
+        border-radius: 8px;
+      }
+
+      /* The shared draft resolution needs more room than the message
+         box, and shows a clearly different, non-interactive look once
+         it's locked (outside Moderated Caucus / Unmoderated Caucus /
+         Drafting Solutions). */
+      .resolution-textarea {
+        min-height: 260px;
+        font-family: "Georgia", "Times New Roman", serif;
+        line-height: 1.5;
+      }
+
+      .resolution-textarea:disabled {
+        background: #eef1f6;
+        color: #52617c;
+        cursor: not-allowed;
+        resize: none;
+      }
+
+      select:focus-visible,
+      textarea:focus-visible,
+      button:focus-visible {
+        outline: 3px solid #8bb5ff;
+        outline-offset: 2px;
+      }
+
+      .form-status {
+        min-height: 1.25em;
+        margin: 0;
+        color: #52617c;
+        font-size: 0.9rem;
+      }
+
+      /* Creates a small, clear path to the feedback page at the page bottom. */
+      .site-footer {
+        padding: 28px 12px 0;
+        text-align: center;
+      }
+
+      .community-link {
+        display: inline-block;
+        padding: 11px 16px;
+        color: #1f4b99;
+        border: 1px solid #1f4b99;
+        border-radius: 7px;
+        font-weight: bold;
+        text-decoration: none;
+      }
+
+      .community-link:hover {
+        color: #ffffff;
+        background: #1f4b99;
+      }
+
+      /* Keeps the layout comfortable and readable on small screens. */
+      @media (max-width: 560px) {
+        body {
+          padding: 28px 14px;
+        }
+
+        .card,
+        .committee-hero {
+          padding: 24px;
+        }
+
+        .committee-hero::after {
+          right: -72px;
+        }
+
+        .delegate {
+          align-items: flex-start;
+          flex-direction: column;
+          gap: 5px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Pop-up announcing a phase change, shown briefly by committee.js. -->
+    <div class="phase-toast" id="phase-toast" role="status" aria-live="assertive"></div>
+    <main>
+      <!-- Shown only when all five human delegate seats are already
+           taken by other visitors -- this visitor still sees everything
+           live, but can't vote, message, or edit the resolution. Filled
+           in and shown/hidden by committee.js. -->
+      <p class="observer-banner" id="observer-notice" hidden>
+        The committee's five delegate seats are all taken right now -- you're watching live as an observer.
+      </p>
+
+      <div class="layout-grid">
+        <div class="layout-main">
+          <!-- Identifies the active MUN committee. -->
+          <section class="card committee-hero" aria-labelledby="committee-name">
+        <p class="label">Committee</p>
+        <h1 id="committee-name">UN Sustainable Development Committee</h1>
+        <!-- The topic itself is now chosen by a live Setting the Agenda
+             vote (see committee.js), so this label and text are filled
+             in dynamically -- with whatever topic is currently proposed
+             or, once that vote passes, whichever one was adopted. -->
+        <p class="label" id="committee-topic-label">Topic</p>
+        <p class="topic" id="committee-topic-text">Waiting for the chair to propose a topic…</p>
+      </section>
+
+      <!-- Tracks the committee through the real MUN procedure (Presence
+           Check through Signing) and lets delegates vote Yes/No -- no
+           abstaining -- to move to the next phase. Shared live across
+           every visitor through Firestore; see committee.js. -->
+      <section class="card" aria-labelledby="procedure-heading">
+        <h2 id="procedure-heading">Committee Procedure</h2>
+        <p class="label" id="phase-step">Phase 1 of 8</p>
+        <p class="phase-name" id="phase-name">Setting the Agenda</p>
+        <!-- Only shown during Setting the Agenda -- the 60-second
+             countdown for the topic vote. Filled in and ticked every
+             second by committee.js. -->
+        <p class="label topic-vote-timer" id="topic-vote-timer" hidden></p>
+        <p class="vote-question" id="vote-question"></p>
+        <!-- Live bar chart of how the current vote is going -- one bar
+             per possible choice plus "Not Yet Voted", updating as soon
+             as anyone votes. Filled in by committee.js. -->
+        <p class="label">Live Vote Status</p>
+        <div class="roll-call-chart" id="vote-status-chart"></div>
+        <div class="vote-rows" id="vote-rows"></div>
+        <p class="form-status" id="vote-status" aria-live="polite"></p>
+        <div class="procedure-actions">
+          <button class="secondary-button" id="reset-vote-button" type="button" hidden>
+            Reset Vote
+          </button>
+        </div>
+      </section>
+
+      <!-- The shared draft resolution: every delegate editing this page
+           can write here together during Moderated Caucus, Unmoderated
+           Caucus, and Drafting Solutions. Hidden until Moderated Caucus
+           begins, then stays visible (read-only) through Signing so
+           delegates can review exactly what they're voting to sign.
+           Shared live across every visitor through Firestore; see
+           committee.js. -->
+      <section class="card" id="resolution-card" aria-labelledby="resolution-heading" hidden>
+        <h2 id="resolution-heading">Draft Resolution</h2>
+        <p class="label" id="resolution-hint"></p>
+        <textarea
+          class="resolution-textarea"
+          id="resolution-textarea"
+          rows="14"
+          maxlength="20000"
+          placeholder="Start drafting the resolution here -- every delegate editing this page sees changes live."
+        ></textarea>
+        <p class="form-status" id="resolution-status" aria-live="polite"></p>
+      </section>
+
+      <!-- Shows the Presence Check (roll call) outcome as a bar chart once
+           that first vote has passed -- who ended up Voting vs Not Voting.
+           Hidden until then; filled in by committee.js. -->
+      <section class="card" id="roll-call-card" aria-labelledby="roll-call-heading" hidden>
+        <h2 id="roll-call-heading">Roll Call Results</h2>
+        <div class="roll-call-chart" id="roll-call-chart"></div>
+      </section>
+
+      <!-- Lists the three delegates currently in this committee. -->
+      <section class="card" aria-labelledby="delegates-heading">
+        <h2 id="delegates-heading">Delegates</h2>
+        <!-- Populated by committee.js from the current list of delegates.
+             Any delegate can be picked below to hear an AI-generated speech. -->
+        <ul class="delegate-list" id="delegate-list"></ul>
+      </section>
+
+      <!-- Shows mock discussion messages from human delegates. -->
+      <section class="card" aria-labelledby="discussion-heading">
+        <h2 id="discussion-heading">Committee Discussion</h2>
+        <!-- Lets a visitor pick a delegate, voice gender, and accent
+             setting, then generate that delegate's AI speech as audio. -->
+        <div class="speech-controls">
+          <label class="form-label" for="speech-country">Delegate</label>
+          <!-- committee.js fills this in with only the two delegates
+               randomly assigned to be AI Delegates this page load. -->
+          <select id="speech-country"></select>
+          <label class="form-label" for="speech-gender">Voice gender</label>
+          <select id="speech-gender">
+            <option value="female">Female</option>
+            <option value="male">Male</option>
+          </select>
+          <label class="checkbox-label" for="speech-accent">
+            <input type="checkbox" id="speech-accent" />
+            Use this delegate's country accent
+          </label>
+          <button class="ai-speech-button" id="ai-speech-button" type="button">
+            Generate AI Speech
+          </button>
+          <p class="form-status" id="speech-status" aria-live="polite"></p>
+        </div>
+        <!-- Filled in by committee.js with each AI Delegate speech a
+             visitor generates, complete with Play/Pause and Stop controls. -->
+        <div class="discussion-area" id="discussion-feed"></div>
+        <!-- Announces saved user messages for visitors using assistive technology. -->
+        <div class="discussion-area" id="user-message-feed" aria-live="polite"></div>
+        <!-- Lets human delegates submit their own ideas to the shared discussion. -->
+        <form class="message-form" id="message-form">
+          <p class="form-label">Representing</p>
+          <!-- Filled in by committee.js with the country this visitor
+               was randomly assigned when they joined as a delegate --
+               not a choice, so there's no select here anymore. -->
+          <p class="my-country" id="my-country-display">Joining the committee…</p>
+          <label class="form-label" for="message">Your message</label>
+          <textarea
+            id="message"
+            name="message"
+            maxlength="500"
+            placeholder="Share your committee idea…"
+            required
+          ></textarea>
+          <button class="primary-button" type="submit">Send Message</button>
+          <p class="form-status" id="message-status" aria-live="polite"></p>
+        </form>
+          </section>
+        </div>
+
+        <aside class="layout-sidebar">
+        <!-- Queue Order: shown only during Yield Time. One delegate at a
+             time has the floor and can yield their remaining time to the
+             Chair, which hands the floor to the next human delegate (AI
+             Delegates are skipped automatically) -- everyone else sees
+             exactly which position they're in, so it's clear who's
+             speaking now and when their own turn will come. Shared live
+             across every visitor through Firestore; see committee.js. -->
+        <section class="card" id="yield-card" aria-labelledby="yield-heading" hidden>
+          <h2 id="yield-heading">Queue Order</h2>
+          <ul class="yield-order-list" id="yield-order-list"></ul>
+          <button class="primary-button" id="yield-button" type="button" hidden>
+            Yield to the Chair
+          </button>
+          <p class="form-status" id="yield-status" aria-live="polite"></p>
+        </section>
+
+        <!-- Always-visible timeline of every MUN procedure phase in order,
+             with a checkmark for each one already completed. Filled in by
+             committee.js from the same shared committee state. -->
+        <section class="card" aria-labelledby="timeline-heading">
+          <h2 id="timeline-heading">Conference Timeline</h2>
+          <table class="timeline-table">
+            <thead>
+              <tr>
+                <th>Phase</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="timeline-body"></tbody>
+          </table>
+        </section>
+
+        </aside>
+      </div>
+    </main>
+    <!-- Links the committee page to the community feedback form and back
+         to the role-selection landing page. -->
+    <footer class="site-footer">
+      <a class="community-link" href="community.html">Share your experiences</a>
+      <a class="community-link" href="join.html">← Choose a different role</a>
+    </footer>
+    <script type="module" src="committee.js"></script>
+  </body>
+</html>

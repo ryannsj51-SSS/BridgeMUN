@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Logn MUN | Community Opinions</title>
+    <style>
+      /* Creates a public opinions page consistent with the community feedback page. */
+      :root {
+        color: #14233b;
+        background: #e8edf4;
+        font-family: Arial, sans-serif;
+      }
+
+      body {
+        margin: 0;
+        padding: 56px 20px;
+        background:
+          linear-gradient(rgb(255 255 255 / 70%), rgb(255 255 255 / 70%)),
+          linear-gradient(90deg, rgb(31 75 153 / 6%) 1px, transparent 1px),
+          linear-gradient(rgb(31 75 153 / 6%) 1px, transparent 1px),
+          #e8edf4;
+        background-size: auto, 36px 36px, 36px 36px, auto;
+      }
+
+      main {
+        max-width: 760px;
+        margin: 0 auto;
+      }
+
+      /* Holds the public feedback cards in one readable panel. */
+      .opinions-card {
+        padding: clamp(28px, 6vw, 48px);
+        background: rgb(255 255 255 / 94%);
+        border: 1px solid #d6dfeb;
+        border-radius: 16px;
+        box-shadow: 0 12px 30px rgb(20 35 59 / 9%);
+      }
+
+      .eyebrow {
+        margin: 0 0 8px;
+        color: #1f4b99;
+        font-size: 0.85rem;
+        font-weight: bold;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        margin: 0;
+        font-family: Georgia, serif;
+        font-size: clamp(2rem, 5vw, 3rem);
+        letter-spacing: -0.03em;
+      }
+
+      .intro,
+      .status {
+        color: #52617c;
+        line-height: 1.6;
+      }
+
+      .intro {
+        margin: 14px 0 28px;
+      }
+
+      /* Separates individual community opinions without exposing user identities. */
+      .opinions-feed {
+        display: grid;
+        gap: 12px;
+      }
+
+      .opinion {
+        margin: 0;
+        padding: 16px;
+        background: #f7f9fc;
+        border: 1px solid #e1e7f0;
+        border-left: 4px solid #1f4b99;
+        border-radius: 10px;
+        line-height: 1.55;
+        white-space: pre-wrap;
+      }
+
+      .back-link {
+        display: inline-block;
+        margin-top: 24px;
+        padding: 11px 0;
+        color: #1f4b99;
+        font-weight: bold;
+        text-decoration: none;
+      }
+
+      .back-link:hover {
+        text-decoration: underline;
+      }
+
+      .back-link:focus-visible {
+        outline: 3px solid #8bb5ff;
+        outline-offset: 2px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <!-- Displays public feedback submitted by the Logn MUN community. -->
+      <section class="opinions-card" aria-labelledby="opinions-heading">
+        <p class="eyebrow">Logn MUN Community</p>
+        <h1 id="opinions-heading">Community opinions</h1>
+        <p class="intro">These experiences are shared anonymously by the community.</p>
+        <p class="status" id="opinions-status" aria-live="polite">Loading opinions…</p>
+        <div class="opinions-feed" id="opinions-feed" aria-live="polite"></div>
+        <a class="back-link" href="community.html">← Share your experience</a>
+      </section>
+    </main>
+    <script type="module" src="opinions.js"></script>
+  </body>
+</html>
