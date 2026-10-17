@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Logn MUN | My Page</title>
+    <style>
+      /* Matches the same colors, spacing, and typeface as the rest of
+         the site (see join.html / delegate.html) so this feels like
+         one site, not a separate dashboard bolted on. */
+      :root {
+        color: #14233b;
+        background: #e8edf4;
+        font-family: Arial, sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        padding: 56px 20px;
+        box-sizing: border-box;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background:
+          linear-gradient(rgb(255 255 255 / 70%), rgb(255 255 255 / 70%)),
+          linear-gradient(90deg, rgb(31 75 153 / 6%) 1px, transparent 1px),
+          linear-gradient(rgb(31 75 153 / 6%) 1px, transparent 1px),
+          #e8edf4;
+        background-size: auto, 36px 36px, 36px 36px, auto;
+      }
+
+      main {
+        width: 100%;
+        max-width: 520px;
+      }
+
+      .card {
+        padding: clamp(28px, 6vw, 44px);
+        background: rgb(255 255 255 / 94%);
+        border: 1px solid #d6dfeb;
+        border-radius: 16px;
+        box-shadow: 0 12px 30px rgb(20 35 59 / 9%);
+        text-align: center;
+      }
+
+      .label {
+        margin: 0 0 4px;
+        color: #52617c;
+        font-size: 0.85rem;
+        font-weight: bold;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+
+      h1 {
+        margin: 0 0 8px;
+        font-size: 1.7rem;
+      }
+
+      .my-page-email {
+        margin: 0 0 28px;
+        color: #384965;
+      }
+
+      button {
+        font: inherit;
+        cursor: pointer;
+      }
+
+      .join-button {
+        width: 100%;
+        padding: 16px 18px;
+        border-radius: 10px;
+        font-weight: bold;
+        font-size: 1.05rem;
+        color: #ffffff;
+        background: #1f4b99;
+        border: 1px solid #1f4b99;
+      }
+
+      .join-button:hover:not(:disabled) {
+        background: #163a7a;
+      }
+
+      button:disabled {
+        cursor: not-allowed;
+        opacity: 0.65;
+      }
+
+      .join-hint {
+        margin: 10px 0 0;
+        color: #52617c;
+        font-size: 0.9rem;
+      }
+
+      .divider {
+        margin: 22px 0;
+        color: #93a6c6;
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+      }
+
+      #join-code-form {
+        display: flex;
+        gap: 8px;
+      }
+
+      #join-code-input {
+        flex: 1;
+        min-width: 0;
+        padding: 12px;
+        font: inherit;
+        letter-spacing: 0.1em;
+        text-align: center;
+        color: #14233b;
+        background: #ffffff;
+        border: 1px solid #b9c6d8;
+        border-radius: 8px;
+      }
+
+      #join-code-input:focus {
+        outline: none;
+        border-color: #1f4b99;
+      }
+
+      .secondary-button {
+        padding: 12px 18px;
+        color: #1f4b99;
+        background: #ffffff;
+        border: 1px solid #1f4b99;
+        border-radius: 8px;
+        font-weight: bold;
+      }
+
+      .secondary-button:hover:not(:disabled) {
+        color: #ffffff;
+        background: #1f4b99;
+      }
+
+      .join-status {
+        min-height: 1.25em;
+        margin: 14px 0 0;
+        color: #52617c;
+        font-size: 0.9rem;
+      }
+
+      /* Step 2: the active conference's code and the Chair/Delegate
+         choice -- shown in place of the create/join form above once a
+         conference has actually been created or joined, all on this
+         same page (no second page load, no second "checking" screen --
+         see my-page.js for why that matters). */
+      #conference-section {
+        text-align: left;
+      }
+
+      .session-code-banner {
+        margin: 0 0 20px;
+        padding: 14px 18px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 6px;
+        text-align: center;
+        background: #eef3ff;
+        border: 1px solid #c7d7f5;
+        border-radius: 10px;
+      }
+
+      .session-code-label {
+        color: #52617c;
+        font-size: 0.8rem;
+        font-weight: bold;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+
+      .session-code {
+        color: #1f4b99;
+        font-size: 1.8rem;
+        font-weight: bold;
+        letter-spacing: 0.12em;
+      }
+
+      .role-choice {
+        display: grid;
+        gap: 10px;
+      }
+
+      .role-button {
+        width: 100%;
+        padding: 14px 16px;
+        text-align: left;
+        color: #14233b;
+        background: #ffffff;
+        border: 1px solid #b9c6d8;
+        border-radius: 10px;
+        font-weight: bold;
+      }
+
+      .role-button:hover:not(:disabled) {
+        border-color: #1f4b99;
+        background: #eef3ff;
+      }
+
+      .role-button.role-button-selected {
+        color: #ffffff;
+        background: #1f4b99;
+        border-color: #1f4b99;
+      }
+
+      .role-panel {
+        margin-top: 18px;
+        padding-top: 18px;
+        border-top: 1px solid #e3e8f0;
+      }
+
+      .role-panel label {
+        display: block;
+        margin: 14px 0 6px;
+        color: #384965;
+        font-size: 0.85rem;
+        font-weight: bold;
+      }
+
+      .role-panel select,
+      .role-panel input[type="text"] {
+        width: 100%;
+        padding: 12px;
+        font: inherit;
+        color: #14233b;
+        background: #ffffff;
+        border: 1px solid #b9c6d8;
+        border-radius: 8px;
+      }
+
+      .role-panel select:focus,
+      .role-panel input[type="text"]:focus {
+        outline: none;
+        border-color: #1f4b99;
+      }
+
+      .primary-button {
+        width: 100%;
+        margin-top: 18px;
+        padding: 14px 16px;
+        color: #ffffff;
+        background: #1f4b99;
+        border: 1px solid #1f4b99;
+        border-radius: 10px;
+        font-weight: bold;
+      }
+
+      .primary-button:hover:not(:disabled) {
+        background: #163a7a;
+      }
+
+      .already-joined-banner {
+        padding: 14px 16px;
+        margin-bottom: 18px;
+        color: #14532d;
+        background: #eaf7ee;
+        border: 1px solid #bfe3c9;
+        border-radius: 10px;
+        font-size: 0.9rem;
+      }
+
+      .already-joined-banner strong {
+        display: block;
+        margin-bottom: 8px;
+      }
+
+      .sign-out-link {
+        display: inline-block;
+        margin-top: 24px;
+        color: #52617c;
+        font-size: 0.9rem;
+        text-decoration: none;
+        background: none;
+        border: none;
+        padding: 0;
+        text-align: center;
+      }
+
+      .sign-out-link:hover {
+        text-decoration: underline;
+      }
+
+      @media (max-width: 420px) {
+        .card {
+          padding: 24px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <!-- Shown briefly while Firebase checks whether this visitor is
+           actually signed in with a real Google account -- my-page.js
+           either removes "hidden" from the page below or sends the
+           visitor back to the sign-in page. -->
+      <section class="card" id="checking-card" aria-live="polite">
+        <p class="label">Logn MUN</p>
+        <p>Checking sign-in&hellip;</p>
+      </section>
+
+      <div id="my-page-dashboard" hidden>
+        <section class="card" aria-labelledby="my-page-heading">
+          <p class="label">Logn MUN</p>
+          <h1 id="my-page-heading">My Page</h1>
+          <p class="my-page-email" id="my-page-email"></p>
+
+          <!-- Step 1: start a brand-new conference, or join one that
+               already exists by its code -- both right here, nothing
+               to navigate to first. -->
+          <div id="start-section">
+            <button class="join-button" id="create-button" type="button">Create My Own Conference</button>
+            <p class="join-hint">Starts a brand-new conference you own, with its own meeting code to share.</p>
+
+            <p class="divider">or</p>
+
+            <form id="join-code-form">
+              <label for="join-code-input" style="position: absolute; left: -9999px;">6-digit meeting code</label>
+              <input
+                type="text"
+                id="join-code-input"
+                inputmode="numeric"
+                pattern="[0-9]{6}"
+                maxlength="6"
+                autocomplete="off"
+                placeholder="Enter a 6-digit meeting code"
+              />
+              <button class="secondary-button" type="submit">Join</button>
+            </form>
+          </div>
+
+          <p class="join-status" id="join-status" aria-live="polite"></p>
+
+          <!-- Step 2: the active conference's code, plus Chair/Delegate
+               -- revealed in place, right on this page, once Step 1
+               succeeds (create or join). -->
+          <div id="conference-section" hidden>
+            <div class="session-code-banner">
+              <span class="session-code-label">Meeting Code</span>
+              <span class="session-code" id="session-code"></span>
+            </div>
+
+            <!-- Shown instead of the role choice once this visitor has
+                 already claimed a seat in this conference (e.g. a
+                 reload) -- see my-page.js. -->
+            <div class="already-joined-banner" id="already-joined-banner" hidden></div>
+
+            <div class="role-choice" id="role-choice">
+              <button class="role-button" id="chair-role-button" type="button" hidden>Enter as Chair</button>
+              <button class="role-button" id="delegate-role-button" type="button">Enter as Delegate</button>
+            </div>
+
+            <!-- Hidden until "Enter as Delegate" is clicked -- a
+                 country picker (only still-open, human-run seats) plus
+                 a name typed fresh for this visit (not saved for next
+                 time). -->
+            <form class="role-panel" id="delegate-form" hidden>
+              <label for="delegate-country">Your country</label>
+              <select id="delegate-country" name="country" required></select>
+
+              <label for="delegate-name">Your name</label>
+              <input
+                type="text"
+                id="delegate-name"
+                name="name"
+                maxlength="40"
+                autocomplete="off"
+                placeholder="e.g. Ryan"
+                required
+              />
+
+              <button class="primary-button" type="submit">Enter Committee Room</button>
+            </form>
+          </div>
+
+          <button class="sign-out-link" id="sign-out-button" type="button">Sign out</button>
+        </section>
+      </div>
+    </main>
+
+    <script type="module" src="my-page.js"></script>
+  </body>
+</html>

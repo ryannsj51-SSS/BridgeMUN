@@ -226,6 +226,28 @@
         font-size: 0.9rem;
       }
 
+      /* The "Start Conference" roster-lock card (between the title and
+         Phase & Topic) and its AI-run status badge -- same visual
+         language as my-page.html's already-joined-banner, since both
+         are "here's where things stand now" messages. */
+      .roster-lock-hint {
+        margin: 0 0 14px;
+        color: #52617c;
+        font-size: 0.9rem;
+        line-height: 1.5;
+      }
+
+      .ai-chair-badge {
+        padding: 14px 16px;
+        margin-top: 14px;
+        color: #14532d;
+        background: #eaf7ee;
+        border: 1px solid #bfe3c9;
+        border-radius: 10px;
+        font-size: 0.9rem;
+        line-height: 1.5;
+      }
+
       .timeline-table {
         width: 100%;
         border-collapse: collapse;
@@ -258,6 +280,128 @@
         color: #1f4b99;
       }
 
+      /* Lets the chair pick a delegate, voice gender, and accent
+         setting, then generate that delegate's AI speech as audio --
+         the same control the delegate page offers (see delegate.html),
+         just also available here so the chair can trigger an AI
+         Delegate's speech directly from the dashboard. */
+      .speech-controls {
+        display: grid;
+        gap: 10px;
+        margin-bottom: 16px;
+      }
+
+      .form-label {
+        color: #384965;
+        font-size: 0.9rem;
+        font-weight: bold;
+      }
+
+      select {
+        box-sizing: border-box;
+        width: 100%;
+        padding: 11px 12px;
+        color: #14233b;
+        background: #ffffff;
+        border: 1px solid #b9c6d8;
+        border-radius: 8px;
+        font: inherit;
+      }
+
+      .checkbox-label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 2px 0 6px;
+        color: #384965;
+        font-size: 0.9rem;
+      }
+
+      .checkbox-label input {
+        width: 16px;
+        height: 16px;
+      }
+
+      .ai-speech-button {
+        margin-bottom: 16px;
+        padding: 11px 16px;
+        color: #ffffff;
+        background: #1f4b99;
+        border: 0;
+        border-radius: 7px;
+        font: inherit;
+        font-weight: bold;
+        cursor: pointer;
+      }
+
+      .ai-speech-button:not(:disabled):hover {
+        background: #163b7c;
+      }
+
+      .ai-speech-button:disabled {
+        cursor: not-allowed;
+        opacity: 0.65;
+      }
+
+      /* Groups the chair's generated speech (text + playback controls)
+         below the controls above -- local to the chair's own screen,
+         same as the delegate page's version of this feature. */
+      .discussion-area {
+        display: grid;
+        gap: 12px;
+      }
+
+      .message {
+        padding: 16px;
+        background: #f7f9fc;
+        border: 1px solid #e1e7f0;
+        border-left: 4px solid #1f4b99;
+        border-radius: 10px;
+      }
+
+      .message-country,
+      .message-type {
+        display: block;
+      }
+
+      .message-country {
+        font-weight: bold;
+      }
+
+      .message-type {
+        margin-top: 4px;
+        color: #52617c;
+        font-size: 0.9rem;
+      }
+
+      .message-text {
+        margin: 12px 0 0;
+      }
+
+      /* Row of small controls under a generated speech so its audio can
+         be paused and resumed, not just played once straight through. */
+      .audio-controls {
+        display: flex;
+        gap: 8px;
+        margin-top: 12px;
+      }
+
+      .audio-control-button {
+        padding: 7px 12px;
+        color: #1f4b99;
+        background: #eef3fb;
+        border: 1px solid #c7d5ea;
+        border-radius: 7px;
+        font: inherit;
+        font-size: 0.85rem;
+        font-weight: bold;
+        cursor: pointer;
+      }
+
+      .audio-control-button:hover {
+        background: #dde8f8;
+      }
+
       @media (max-width: 560px) {
         body {
           padding: 28px 14px;
@@ -272,9 +416,10 @@
   <body>
     <main>
       <!-- Shown briefly while Firebase checks whether this visitor is
-           actually signed in as the one allowed chair account --
-           chair.js either removes "hidden" from the dashboard below or
-           sends the visitor back to the sign-in page. -->
+           actually signed in with Google AND owns the conference named
+           in the ?code= URL -- chair.js either removes "hidden" from
+           the dashboard below or sends the visitor back to their own
+           personal page (or the sign-in page). -->
       <section class="card" id="chair-checking-card" aria-live="polite">
         <p class="label">Logn MUN</p>
         <p>Checking chair sign-in&hellip;</p>
@@ -294,33 +439,114 @@
           <button class="secondary-button" id="sign-out-button" type="button">Sign Out</button>
         </section>
 
-        <!-- Current phase/topic, and -- only during Setting the Agenda
+        <!-- The one-time switch that closes delegate registration for
+             good. Any country nobody claimed through a join code
+             becomes an AI Delegate; if literally nobody joined, every
+             country -- including the Chair's own seat -- becomes AI,
+             and the dashboard below drives the whole conference by
+             itself once a topic is chosen (see lockRosterAndStart in
+             committee-data.js and the auto-advance loop in chair.js). -->
+        <section class="card" id="roster-lock-section" aria-labelledby="roster-lock-heading">
+          <h2 id="roster-lock-heading">Start Conference</h2>
+          <p class="roster-lock-hint">
+            Once you click Start, nobody new can join with the meeting code anymore. Any
+            country nobody has claimed yet will be played by an AI Delegate for the rest
+            of this conference.
+          </p>
+          <button class="primary-button" id="lock-roster-button" type="button">Start Conference</button>
+          <p class="form-status" id="roster-lock-status" aria-live="polite"></p>
+          <!-- Shown once rosterLocked is true and chairIsAi is also
+               true -- nobody had joined yet when Start was clicked, so
+               even the Chair's own role is AI now; see
+               renderAiChairStatus in chair.js. -->
+          <p class="ai-chair-badge" id="ai-chair-badge" hidden>
+            Nobody joined before you clicked Start, so this conference is fully AI-run.
+            Pick a topic below and the dashboard will run the rest of the conference by
+            itself for as long as this tab stays open.
+          </p>
+        </section>
+
+        <!-- Current phase/topic, and -- only during Conference Setup
              -- a direct way to pick the topic instead of letting the
              site propose one at random. -->
         <section class="card" aria-labelledby="topic-heading">
           <h2 id="topic-heading">Phase &amp; Topic</h2>
-          <p class="label" id="chair-phase-step">Phase 1 of 8</p>
-          <p class="phase-name" id="chair-phase-name">Setting the Agenda</p>
+          <p class="label" id="chair-phase-step">Phase 1 of 7</p>
+          <p class="phase-name" id="chair-phase-name">Conference Setup</p>
           <p class="topic-text" id="chair-topic-text"></p>
 
           <div id="topic-choice-list" class="topic-choice-list"></div>
           <p class="topic-choice-note" id="topic-choice-note" hidden>
-            Choosing a topic is only available during Setting the Agenda.
+            Choosing a topic is only available during Conference Setup.
           </p>
           <p class="form-status" id="topic-choice-status" aria-live="polite"></p>
         </section>
 
-        <!-- Only shown during Yield Time -- who's already yielded,
+        <!-- Chair-only controls for moving the committee along from
+             whichever phase a delegate vote doesn't drive on its own --
+             each button below only appears during the phase it applies
+             to (see renderChairState in chair.js). -->
+        <section class="card" aria-labelledby="chair-actions-heading">
+          <h2 id="chair-actions-heading">Chair Controls</h2>
+          <!-- Only shown once the presence check has passed -- clicking
+               this bumps the running conference count, sends every
+               delegate the welcome message below, and opens the
+               goal-agreement poll, all in one click (see
+               startConferenceAndAnnounce in committee-data.js). -->
+          <button class="primary-button" id="start-conference-button" type="button" hidden>
+            Send Welcome Message
+          </button>
+          <p class="form-status" id="start-conference-preview" aria-live="polite" hidden></p>
+          <button class="primary-button" id="begin-motions-button" type="button" hidden>
+            Begin Motion Raising
+          </button>
+          <p class="form-status" id="chair-motion-status" aria-live="polite" hidden></p>
+          <button class="primary-button" id="open-motion-vote-button" type="button" hidden>
+            Open Vote on This Motion
+          </button>
+          <button class="primary-button" id="open-final-vote-button" type="button" hidden>
+            Open Final Vote
+          </button>
+          <p class="form-status" id="chair-actions-status" aria-live="polite"></p>
+          <!-- Only shown in a human-chaired conference (never in an
+               AI-run one, where delegates can already click Proceed at
+               any time) during one of the four phases that don't hold
+               a vote of their own. Delegates informally agree in the
+               chat when they're ready; this puts up a simple poll
+               collecting their Proceed clicks so the Chair can see it
+               before deciding to click whichever button above actually
+               moves the committee on -- see openReadinessCheck in
+               committee-data.js, and renderChairState below for the
+               live readout. -->
+          <button class="secondary-button" id="open-readiness-check-button" type="button" hidden>
+            Open Readiness Check
+          </button>
+          <p class="form-status" id="readiness-check-status" aria-live="polite" hidden></p>
+        </section>
+
+        <!-- Only shown during Caucus / Debate -- who's already yielded,
              who's speaking now, and who's still waiting, so the chair
-             knows exactly who to call on next. -->
+             knows exactly who to call on next, plus approving whichever
+             delegate's yield request is pending and deciding when
+             debate is over. -->
         <section class="card" id="chair-yield-card" aria-labelledby="chair-yield-heading" hidden>
           <h2 id="chair-yield-heading">Queue Order</h2>
           <ul class="roster-list" id="chair-yield-order-list"></ul>
+          <p class="form-status" id="chair-yield-request-status" aria-live="polite"></p>
+          <button class="primary-button" id="approve-yield-button" type="button" hidden>
+            Approve Yield Request
+          </button>
+          <button class="secondary-button" id="advance-to-resolution-button" type="button">
+            Move to Resolution Drafting
+          </button>
         </section>
 
         <!-- A simple read-only view of the current vote -- the chair
-             doesn't vote, so there are no buttons here, just status. -->
-        <section class="card" aria-labelledby="vote-heading">
+             doesn't vote, so there are no buttons here, just status.
+             Only shown for the three phases that actually hold a vote
+             (Conference Setup's presence check, Motion Voting, and the
+             final Sign/Not Sign/Abstain vote). -->
+        <section class="card" id="chair-vote-section" aria-labelledby="vote-heading">
           <h2 id="vote-heading">Live Vote Status</h2>
           <p class="form-status" id="chair-vote-summary" aria-live="polite"></p>
           <ul class="vote-rows" id="chair-vote-rows"></ul>
@@ -346,6 +572,36 @@
             </thead>
             <tbody id="chair-timeline-body"></tbody>
           </table>
+        </section>
+
+        <!-- Lets the chair generate and play any AI Delegate's speech
+             directly from the dashboard -- the same feature the
+             delegate page already offers, just also available here. -->
+        <section class="card" aria-labelledby="chair-speech-heading">
+          <h2 id="chair-speech-heading">AI Delegate Speech</h2>
+          <div class="speech-controls">
+            <label class="form-label" for="chair-speech-country">Delegate</label>
+            <!-- chair.js fills this in with only the two delegates
+                 randomly assigned to be AI Delegates this session. -->
+            <select id="chair-speech-country"></select>
+            <label class="form-label" for="chair-speech-gender">Voice gender</label>
+            <select id="chair-speech-gender">
+              <option value="female">Female</option>
+              <option value="male">Male</option>
+            </select>
+            <label class="checkbox-label" for="chair-speech-accent">
+              <input type="checkbox" id="chair-speech-accent" />
+              Use this delegate's country accent
+            </label>
+            <button class="ai-speech-button" id="chair-ai-speech-button" type="button">
+              Generate AI Speech
+            </button>
+            <p class="form-status" id="chair-speech-status" aria-live="polite"></p>
+          </div>
+          <!-- Filled in by chair.js with each AI Delegate speech the
+               chair generates, complete with Play/Pause and Stop
+               controls. Shown only on the chair's own screen. -->
+          <div class="discussion-area" id="chair-speech-feed"></div>
         </section>
 
         <!-- Chair-only, and irreversible -- this used to be a button any

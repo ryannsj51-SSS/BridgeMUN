@@ -21,16 +21,21 @@ import {
   getTopic,
   randomTopicId,
   COMMITTEE_PHASES,
-  TOPIC_PHASE_INDEX,
-  PRESENCE_CHECK_PHASE_INDEX,
-  YIELD_TIME_PHASE_INDEX,
+  SETUP_PHASE_INDEX,
+  OPENING_SPEECHES_PHASE_INDEX,
+  MOTION_RAISING_PHASE_INDEX,
+  MOTION_VOTING_PHASE_INDEX,
+  CAUCUS_DEBATE_PHASE_INDEX,
+  RESOLUTION_VOTE_PHASE_INDEX,
+  CONFERENCE_RESULTS_PHASE_INDEX,
+  MOTION_TYPES,
+  SETUP_STAGE,
+  conferenceWelcomeMessage,
   findNextHumanSpeakerIndex,
-  TOPIC_VOTE_DURATION_MS,
   VOTE_THRESHOLD,
   VOTE_CHOICE_LABELS,
   VOTE_CHOICE_BUTTON_CLASSES,
-  isSigningPhase,
-  isTopicPhase,
+  isFinalSigningVote,
   voteOutcome,
   committeeStateRef,
   latestCommitteeState,
@@ -38,13 +43,19 @@ import {
   committeeResolutionRef,
   RESOLUTION_MAX_LENGTH,
   RESOLUTION_EDITABLE_START_INDEX,
-  RESOLUTION_EDITABLE_END_INDEX,
   isResolutionEditablePhase,
   initialVotesForPhase,
   logActivity,
   ensureCommitteeState,
   joinSessionByCode,
   getCommitteeMessagesCollection,
+  formatDelegateLabel,
+  castVote,
+  castMotion,
+  requestYield,
+  lockRosterAndStart,
+  syncAiAutoAdvance,
+  markReadyToProceed,
 } from "./committee-data.js";
 
 // Every delegate session is scoped to one meeting's 6-digit code, shared
@@ -61,6 +72,14 @@ if (!joinedSession) {
   window.location.href = "join-code.html";
   throw new Error("No active meeting code -- redirecting to the code entry page.");
 }
+
+// Shows the meeting code right at the top of the page -- see the
+// session-code-banner markup in delegate.html, just under the
+// committee title -- so a delegate can see and share it well before
+// the "Start Conference" card further down. savedSessionCode is
+// already known to be this visitor's real, joined code by this point
+// (the redirect above already ruled out anything else).
+document.getElementById("delegate-session-code").textContent = savedSessionCode;
 
 // Draft-resolution textarea UI state -- local to this page (chair.js has
 // no textarea to keep in sync), unlike the shared data above.
@@ -85,8 +104,9 @@ async function claimDelegateCountry() {
   return runTransaction(db, async (transaction) => {
     const snapshot = await transaction.get(committeeStateRef);
     if (!snapshot.exists()) {
-      // ensureCommitteeState() always runs first and creates this
-      // document -- this is just a safety net in case that ever races.
+      // joinSessionByCode() already confirmed this document exists
+      // before this page ever loaded -- this is just a safety net in
+      // case the conference's owner resets it in between.
       return null;
     }
 
@@ -146,6 +166,15 @@ const messageStatus = document.getElementById("message-status");
 const observerNoticeEl = document.getElementById("observer-notice");
 const myCountryDisplayEl = document.getElementById("my-country-display");
 
+// The "Start Conference" card -- lets a lone delegate start the
+// conference themselves if nobody else ever joins with the meeting
+// code (see renderCommitteeState below for how these three track
+// rosterLocked/chairIsAi, and lockRosterAndStart/syncAiAutoAdvance in
+// committee-data.js for what actually runs once they do).
+const delegateStartButton = document.getElementById("delegate-start-button");
+const delegateStartStatusEl = document.getElementById("delegate-start-status");
+const delegateAiChairBadgeEl = document.getElementById("delegate-ai-chair-badge");
+
 // Controls for picking which delegate, voice gender, and accent setting to
 // use before generating that delegate's AI speech as real audio.
 const speechCountrySelect = document.getElementById("speech-country");
@@ -157,17 +186,26 @@ const speechStatus = document.getElementById("speech-status");
 // Elements for the committee procedure / voting panel.
 const phaseStepEl = document.getElementById("phase-step");
 const phaseNameEl = document.getElementById("phase-name");
-const topicVoteTimerEl = document.getElementById("topic-vote-timer");
 const voteQuestionEl = document.getElementById("vote-question");
 const voteStatusChartEl = document.getElementById("vote-status-chart");
 const voteRowsEl = document.getElementById("vote-rows");
 const voteStatusEl = document.getElementById("vote-status");
 const resetVoteButton = document.getElementById("reset-vote-button");
+const proceedButton = document.getElementById("proceed-button");
+const proceedStatusEl = document.getElementById("proceed-status");
+const conferenceWelcomeBannerEl = document.getElementById("conference-welcome-banner");
 
-// Elements for the Yield Time speaking-order panel.
+// Elements for the Motion Raising panel -- any delegate can propose one
+// of the two motions below; the chair opens the vote on whichever one
+// is currently raised (see chair.js).
+const motionPickerEl = document.getElementById("motion-picker");
+const motionButtons = motionPickerEl ? [...motionPickerEl.querySelectorAll(".motion-button")] : [];
+
+// Elements for the Caucus / Debate speaking-order panel.
 const yieldCard = document.getElementById("yield-card");
 const yieldOrderListEl = document.getElementById("yield-order-list");
-const yieldButton = document.getElementById("yield-button");
+const yieldForm = document.getElementById("yield-form");
+const yieldMessageInput = document.getElementById("yield-message");
 const yieldStatusEl = document.getElementById("yield-status");
 
 // Elements for the shared Draft Resolution document.
@@ -176,13 +214,11 @@ const resolutionHintEl = document.getElementById("resolution-hint");
 const resolutionTextarea = document.getElementById("resolution-textarea");
 const resolutionStatusEl = document.getElementById("resolution-status");
 
-// The committee topic banner at the top of the page -- shows whichever
-// topic is currently proposed or, once Setting the Agenda has passed,
-// the topic that was actually adopted for the rest of the session.
+// The committee topic banner at the top of the page.
 const committeeTopicLabelEl = document.getElementById("committee-topic-label");
 const committeeTopicTextEl = document.getElementById("committee-topic-text");
 
-// Elements for the Roll Call Results bar chart (the Presence Check outcome).
+// Elements for the Roll Call Results bar chart (the presence check outcome from Conference Setup).
 const rollCallCard = document.getElementById("roll-call-card");
 const rollCallChart = document.getElementById("roll-call-chart");
 
@@ -241,7 +277,10 @@ function renderTimelineTable(phaseIndex, sessionComplete) {
 }
 
 // Clears every vote for the current phase back to blank (AI Delegates
-// immediately auto-vote Yes again) so delegates can retry a failed motion.
+// immediately auto-vote again) so delegates can retry a failed vote.
+// Only ever shown for the final Sign/Not Sign/Abstain vote -- a failed
+// Motion Voting vote already reverts to Motion Raising automatically
+// (see castVote), so there's nothing left here to reset for that one.
 async function resetCurrentVote() {
   await ensureAnonymousUser();
   const phaseName = await runTransaction(db, async (transaction) => {
@@ -251,326 +290,21 @@ async function resetCurrentVote() {
     }
 
     const data = snapshot.data();
-    // Setting the Agenda never uses this manual reset -- a failed or
-    // timed-out topic vote proposes a new topic automatically instead.
-    if (data.phaseIndex === TOPIC_PHASE_INDEX) {
+    if (!isFinalSigningVote(data.phaseIndex, data.subStage)) {
       return null;
     }
     transaction.update(committeeStateRef, {
-      votes: initialVotesForPhase(data.delegateRoles, data.phaseIndex),
+      votes: initialVotesForPhase(data.delegateRoles, data.phaseIndex, data.subStage),
       updatedAt: serverTimestamp(),
     });
     return COMMITTEE_PHASES[data.phaseIndex];
   });
 
   if (phaseName) {
-    logActivity("vote_reset", null, `The vote for ${phaseName} was reset after the motion failed.`);
+    logActivity("vote_reset", null, `The vote for ${phaseName} was reset after it failed.`);
   }
 }
 
-// Records one Human Delegate's Yes/No vote. If that vote gives the
-// passing choice a majority of all delegates, this same write advances
-// the committee to the next phase and starts a fresh vote for it --
-// done inside one transaction so it stays correct even if multiple
-// visitors vote at the same moment.
-async function castVote(country, choice) {
-  await ensureAnonymousUser();
-
-  const result = await runTransaction(db, async (transaction) => {
-    const snapshot = await transaction.get(committeeStateRef);
-    if (!snapshot.exists()) {
-      return null;
-    }
-
-    const data = snapshot.data();
-    // Setting the Agenda has its own vote function (castTopicVote) with
-    // its own choices (agree/disagree) and anonymity handling -- refuse
-    // to run here so a stale button from a previous render (e.g. right
-    // before someone else reset the session or the topic was
-    // re-proposed) can never write an invalid "yes"/"no" vote into that
-    // phase's data.
-    if (data.phaseIndex === TOPIC_PHASE_INDEX) {
-      return null;
-    }
-    const votes = { ...data.votes, [country]: choice };
-    const phaseName = COMMITTEE_PHASES[data.phaseIndex];
-    const isLastPhase = data.phaseIndex >= COMMITTEE_PHASES.length - 1;
-    const passingValue = isSigningPhase(data.phaseIndex) ? "sign" : "yes";
-
-    if (voteOutcome(votes, passingValue) === "passed" && !isLastPhase) {
-      const update = {
-        phaseIndex: data.phaseIndex + 1,
-        votes: initialVotesForPhase(data.delegateRoles, data.phaseIndex + 1),
-        updatedAt: serverTimestamp(),
-      };
-
-      // Entering Yield Time starts the speaking order over at the
-      // first human delegate (AI Delegates are skipped automatically --
-      // see findNextHumanSpeakerIndex), so whoever gets the floor next
-      // is always a real person who can actually click Yield.
-      if (data.phaseIndex + 1 === YIELD_TIME_PHASE_INDEX) {
-        update.currentSpeakerIndex = findNextHumanSpeakerIndex(data.delegateRoles, 0);
-      }
-
-      // The Presence Check result becomes the permanent Roll Call Results
-      // record -- any delegate who never got to vote Yes counts as Not
-      // Voting, since the roll call has now closed.
-      let rollCallSummary = null;
-      if (data.phaseIndex === PRESENCE_CHECK_PHASE_INDEX) {
-        const rollCallVotes = {};
-        COMMITTEE_COUNTRIES.forEach((country2) => {
-          rollCallVotes[country2] = votes[country2] === "yes" ? "yes" : "no";
-        });
-        update.rollCallVotes = rollCallVotes;
-
-        const votingCountries = COMMITTEE_COUNTRIES.filter((c) => rollCallVotes[c] === "yes");
-        const notVotingCountries = COMMITTEE_COUNTRIES.filter((c) => rollCallVotes[c] === "no");
-        rollCallSummary =
-          `Voting: ${votingCountries.join(", ") || "None"}. ` +
-          `Not Voting: ${notVotingCountries.join(", ") || "None"}.`;
-      }
-
-      transaction.update(committeeStateRef, update);
-      return { phaseName, advancedTo: COMMITTEE_PHASES[data.phaseIndex + 1], rollCallSummary };
-    }
-
-    transaction.update(committeeStateRef, {
-      votes,
-      updatedAt: serverTimestamp(),
-    });
-
-    // Signing is the last phase, so it never hits the "advance" branch
-    // above -- passing here means the whole committee session is done.
-    const sessionComplete = isLastPhase && voteOutcome(votes, passingValue) === "passed";
-    return { phaseName, advancedTo: null, rollCallSummary: null, sessionComplete };
-  });
-
-  if (!result) {
-    return;
-  }
-
-  logActivity(
-    "vote_cast",
-    country,
-    `${country} voted ${VOTE_CHOICE_LABELS[choice] ?? choice} during ${result.phaseName}.`,
-  );
-
-  if (result.advancedTo) {
-    logActivity(
-      "phase_advanced",
-      null,
-      `Committee advanced from ${result.phaseName} to ${result.advancedTo} by majority vote.`,
-    );
-  }
-
-  if (result.sessionComplete) {
-    logActivity("session_complete", null, "The resolution passed Signing by majority vote. Committee session complete.");
-  }
-
-  if (result.rollCallSummary) {
-    logActivity(
-      "roll_call_completed",
-      null,
-      `Roll call finished and the Roll Call Results chart was generated. ${result.rollCallSummary}`,
-    );
-  }
-}
-
-// Lets whichever delegate currently has the floor during Yield Time
-// yield their remaining speaking time to the Chair, handing the floor
-// to the next human delegate in order (AI Delegates are skipped
-// automatically). This is purely a live, visible record of who's
-// spoken -- it doesn't cast a Yes/No vote or advance the phase by
-// itself; the normal majority vote above still does that separately.
-async function castYield(country) {
-  await ensureAnonymousUser();
-
-  await runTransaction(db, async (transaction) => {
-    const snapshot = await transaction.get(committeeStateRef);
-    if (!snapshot.exists()) {
-      return;
-    }
-
-    const data = snapshot.data();
-    // Guards against a stale button (left over from a previous render,
-    // e.g. right before the session was reset or the floor already
-    // moved on) ever yielding for the wrong phase or the wrong country.
-    if (data.phaseIndex !== YIELD_TIME_PHASE_INDEX) {
-      return;
-    }
-    const currentSpeakerIndex = data.currentSpeakerIndex ?? 0;
-    if (COMMITTEE_COUNTRIES[currentSpeakerIndex] !== country) {
-      return;
-    }
-
-    transaction.update(committeeStateRef, {
-      currentSpeakerIndex: findNextHumanSpeakerIndex(data.delegateRoles, currentSpeakerIndex + 1),
-      updatedAt: serverTimestamp(),
-    });
-  });
-
-  logActivity("yield_cast", country, `${country} yielded their remaining speaking time to the Chair.`);
-}
-
-// Records one Human Delegate's Agree/Disagree vote on the proposed topic,
-// with an optional anonymous flag that hides which country cast it from
-// everyone else watching live (the vote still counts the same either
-// way). If the vote reaches a majority Agree, the committee advances to
-// Presence Check with this topic locked in for the rest of the session.
-// If a majority is no longer mathematically possible, the chair
-// immediately proposes a different topic and starts a fresh vote --
-// the same thing that happens automatically when the 60-second time
-// limit runs out (see expireTopicVoteIfNeeded below).
-async function castTopicVote(country, choice, anonymous) {
-  await ensureAnonymousUser();
-
-  const result = await runTransaction(db, async (transaction) => {
-    const snapshot = await transaction.get(committeeStateRef);
-    if (!snapshot.exists()) {
-      return null;
-    }
-
-    const data = snapshot.data();
-    if (data.phaseIndex !== TOPIC_PHASE_INDEX) {
-      return null;
-    }
-
-    const votes = { ...data.votes, [country]: choice };
-    const topicVoteAnonymous = { ...data.topicVoteAnonymous, [country]: anonymous };
-    const outcome = voteOutcome(votes, "agree");
-    const currentTopic = getTopic(data.topicId);
-
-    if (outcome === "passed") {
-      transaction.update(committeeStateRef, {
-        phaseIndex: PRESENCE_CHECK_PHASE_INDEX,
-        votes: initialVotesForPhase(data.delegateRoles, PRESENCE_CHECK_PHASE_INDEX),
-        topicVoteAnonymous,
-        updatedAt: serverTimestamp(),
-      });
-      return { action: "adopted", topicName: currentTopic?.name, choice };
-    }
-
-    if (outcome === "failed") {
-      const nextTopicId = randomTopicId(data.topicId);
-      transaction.update(committeeStateRef, {
-        topicId: nextTopicId,
-        votes: initialVotesForPhase(data.delegateRoles, TOPIC_PHASE_INDEX),
-        topicVoteAnonymous: {},
-        topicVoteDeadlineMs: Date.now() + TOPIC_VOTE_DURATION_MS,
-        updatedAt: serverTimestamp(),
-      });
-      return { action: "reproposed", fromTopicName: currentTopic?.name, toTopicName: getTopic(nextTopicId)?.name, choice };
-    }
-
-    transaction.update(committeeStateRef, {
-      votes,
-      topicVoteAnonymous,
-      updatedAt: serverTimestamp(),
-    });
-    return { action: "recorded", topicName: currentTopic?.name, choice };
-  });
-
-  if (!result) {
-    return;
-  }
-
-  logActivity(
-    "topic_vote_cast",
-    country,
-    `${country} voted ${VOTE_CHOICE_LABELS[result.choice] ?? result.choice} on the proposed topic (${result.topicName ?? "unknown"}).`,
-  );
-
-  if (result.action === "adopted") {
-    logActivity(
-      "topic_adopted",
-      null,
-      `The committee adopted "${result.topicName}" as its topic by majority vote and moved to Presence Check.`,
-    );
-  }
-
-  if (result.action === "reproposed") {
-    logActivity(
-      "topic_reproposed",
-      null,
-      `"${result.fromTopicName}" did not reach a majority, so the chair proposed a new topic: "${result.toTopicName}".`,
-    );
-  }
-}
-
-// Runs automatically while Setting the Agenda's countdown ticks (and once
-// on page load, in case everyone was away when time actually ran out). If
-// the 60-second window has passed and the vote still hasn't reached a
-// majority, the chair proposes a different topic and starts the clock
-// over -- no manual reset needed for this phase, unlike every other one.
-async function expireTopicVoteIfNeeded() {
-  await ensureAnonymousUser();
-
-  const result = await runTransaction(db, async (transaction) => {
-    const snapshot = await transaction.get(committeeStateRef);
-    if (!snapshot.exists()) {
-      return null;
-    }
-
-    const data = snapshot.data();
-    if (data.phaseIndex !== TOPIC_PHASE_INDEX) {
-      return null;
-    }
-    if (Date.now() < data.topicVoteDeadlineMs) {
-      return null;
-    }
-    if (voteOutcome(data.votes, "agree") === "passed") {
-      return null;
-    }
-
-    const currentTopic = getTopic(data.topicId);
-    const nextTopicId = randomTopicId(data.topicId);
-    transaction.update(committeeStateRef, {
-      topicId: nextTopicId,
-      votes: initialVotesForPhase(data.delegateRoles, TOPIC_PHASE_INDEX),
-      topicVoteAnonymous: {},
-      topicVoteDeadlineMs: Date.now() + TOPIC_VOTE_DURATION_MS,
-      updatedAt: serverTimestamp(),
-    });
-    return { fromTopicName: currentTopic?.name, toTopicName: getTopic(nextTopicId)?.name };
-  });
-
-  if (result) {
-    logActivity(
-      "topic_reproposed",
-      null,
-      `The 60-second vote on "${result.fromTopicName}" timed out, so the chair proposed a new topic: "${result.toTopicName}".`,
-    );
-  }
-}
-
-// Updates the visible Setting the Agenda countdown from whatever the
-// latest shared state says, and triggers the automatic re-proposal above
-// once the 60-second window closes. Runs both right after any Firestore
-// update and every second on a timer, so the countdown keeps ticking down
-// live even when nobody else is voting.
-function updateTopicVoteTimerDisplay() {
-  if (!latestCommitteeState || !isTopicPhase(latestCommitteeState.phaseIndex)) {
-    topicVoteTimerEl.hidden = true;
-    return;
-  }
-
-  topicVoteTimerEl.hidden = false;
-  const remainingMs = latestCommitteeState.topicVoteDeadlineMs - Date.now();
-
-  if (remainingMs <= 0) {
-    topicVoteTimerEl.textContent = "Time's up -- proposing a new topic\u2026";
-    expireTopicVoteIfNeeded().catch((error) => console.error("Unable to expire the topic vote:", error));
-    return;
-  }
-
-  topicVoteTimerEl.textContent = `Time remaining to vote: ${Math.ceil(remainingMs / 1000)}s`;
-}
-
-setInterval(updateTopicVoteTimerDisplay, 1000);
-
-// Renders the delegate list, the AI-speech dropdown, and the whole voting
-// panel from one shared committee-state snapshot. Runs for every visitor
-// whenever anyone's vote or the phase changes.
 // Saves the shared draft resolution a short moment after the delegate
 // stops typing -- debounced so we're not writing to Firestore on every
 // single keystroke. Each new keystroke restarts the delay.
@@ -580,13 +314,13 @@ function scheduleResolutionSave() {
     clearTimeout(resolutionSaveTimeoutId);
   }
   resolutionSaveTimeoutId = setTimeout(async () => {
-    // The phase can change while this delay is still counting down (for
-    // example, the chair advances to Signing right after someone's last
-    // keystroke in Drafting Solutions) -- re-check here, right before
+    // The phase (or subStage) can change while this delay is still
+    // counting down (for example, the chair opens the final vote right
+    // after someone's last keystroke) -- re-check here, right before
     // writing, instead of relying only on the disabled textarea, so a
     // save that's no longer allowed doesn't reach Firestore and come
     // back looking like a connection problem.
-    if (!isResolutionEditablePhase(latestCommitteeState?.phaseIndex) || !myAssignedCountry) {
+    if (!isResolutionEditablePhase(latestCommitteeState?.phaseIndex, latestCommitteeState?.subStage) || !myAssignedCountry) {
       resolutionStatusEl.textContent = !myAssignedCountry
         ? "Locked -- observers can't edit the draft resolution."
         : "Locked -- the phase changed before this was saved.";
@@ -606,12 +340,13 @@ function scheduleResolutionSave() {
 }
 
 // Shows, hides, and locks the Draft Resolution card based on the current
-// phase: hidden before Moderated Caucus, editable through Moderated
-// Caucus / Unmoderated Caucus / Drafting Solutions, then visible but
-// read-only from Signing onward so delegates can review exactly what
-// they're voting to sign.
-function renderResolutionCard(phaseIndex) {
-  const editable = isResolutionEditablePhase(phaseIndex) && Boolean(myAssignedCountry);
+// phase: hidden before Caucus / Debate, editable through Caucus / Debate
+// and the "drafting" half of Resolution / Final Vote, then visible but
+// read-only once the final vote actually opens (and for the rest of the
+// session after that) so delegates can review exactly what they're
+// voting to sign.
+function renderResolutionCard(phaseIndex, subStage) {
+  const editable = isResolutionEditablePhase(phaseIndex, subStage) && Boolean(myAssignedCountry);
   const canView = phaseIndex >= RESOLUTION_EDITABLE_START_INDEX;
 
   resolutionCard.hidden = !canView;
@@ -631,7 +366,7 @@ function renderResolutionCard(phaseIndex) {
   if (editable) {
     resolutionHintEl.textContent =
       "Every delegate editing this page writes here together -- changes save automatically and appear live for everyone.";
-  } else if (isResolutionEditablePhase(phaseIndex)) {
+  } else if (isResolutionEditablePhase(phaseIndex, subStage)) {
     // Locked for THIS visitor specifically -- the phase itself still
     // allows editing, but they're an observer, not an assigned delegate.
     resolutionHintEl.textContent = "You're watching as an observer, so this is locked for you -- the committee's delegates can still edit it.";
@@ -654,11 +389,11 @@ function ordinal(n) {
 // The Queue Order panel: who's speaking right now, who's already
 // yielded, and -- for every delegate still waiting -- exactly which
 // position they're in, so nobody has to guess how much longer until
-// their turn.
-function renderYieldCard(phaseIndex, delegateRoles, currentSpeakerIndex) {
-  const onYieldPhase = phaseIndex === YIELD_TIME_PHASE_INDEX;
-  yieldCard.hidden = !onYieldPhase;
-  if (!onYieldPhase) {
+// their turn. Only shown during Caucus / Debate.
+function renderYieldCard(phaseIndex, delegateRoles, currentSpeakerIndex, pendingYieldRequest, delegateNames) {
+  const onCaucusDebate = phaseIndex === CAUCUS_DEBATE_PHASE_INDEX;
+  yieldCard.hidden = !onCaucusDebate;
+  if (!onCaucusDebate) {
     return;
   }
 
@@ -679,7 +414,7 @@ function renderYieldCard(phaseIndex, delegateRoles, currentSpeakerIndex) {
       const status = document.createElement("span");
 
       row.className = "yield-order-row";
-      name.textContent = country;
+      name.textContent = formatDelegateLabel(country, delegateNames);
       status.className = "yield-order-status";
 
       if (delegateRoles[country] === "ai") {
@@ -714,13 +449,24 @@ function renderYieldCard(phaseIndex, delegateRoles, currentSpeakerIndex) {
   );
 
   const isMyTurn = myStatus === "speaking";
-  yieldButton.hidden = !isMyTurn;
-  yieldButton.disabled = false;
+  // A request already sent for THIS visitor's own turn -- the form
+  // stays visible (so they can see what they typed) but locked, since
+  // only the Chair approving it can actually move the floor on now.
+  const myRequestPending = Boolean(pendingYieldRequest) && pendingYieldRequest.country === myAssignedCountry;
+
+  yieldForm.hidden = !isMyTurn;
+  yieldMessageInput.disabled = myRequestPending;
+  yieldForm.querySelector("button").disabled = myRequestPending;
+  if (!myRequestPending && document.activeElement !== yieldMessageInput) {
+    yieldMessageInput.value = "I will yield the rest of my time to the Chair.";
+  }
 
   if (allDone) {
-    yieldStatusEl.textContent = "Every delegate has had the floor -- vote above to proceed to Moderated Caucus.";
+    yieldStatusEl.textContent = "Every delegate has had the floor -- the chair will move the committee on when ready.";
+  } else if (myRequestPending) {
+    yieldStatusEl.textContent = "Your yield request was sent -- waiting for the Chair to approve it.";
   } else if (isMyTurn) {
-    yieldStatusEl.textContent = "You have the floor -- yield your remaining time to the Chair when you're ready.";
+    yieldStatusEl.textContent = "You have the floor -- send a yield request to the Chair when you're ready to give it up.";
   } else if (myStatus === "waiting") {
     yieldStatusEl.textContent =
       myQueuePosition === 1
@@ -729,21 +475,105 @@ function renderYieldCard(phaseIndex, delegateRoles, currentSpeakerIndex) {
   } else if (myStatus === "done") {
     yieldStatusEl.textContent = "You've already yielded your time to the Chair.";
   } else if (currentSpeaker) {
-    yieldStatusEl.textContent = `Waiting for ${currentSpeaker} to yield.`;
+    yieldStatusEl.textContent =
+      pendingYieldRequest?.country === currentSpeaker
+        ? `${currentSpeaker} has asked to yield -- waiting for the Chair to approve it.`
+        : `Waiting for ${currentSpeaker} to yield.`;
   } else {
     yieldStatusEl.textContent = "";
   }
 }
 
+// Shows or hides the Proceed button + its status line, for whichever
+// of the four non-voting phases (Opening Speeches, Motion Raising once
+// a motion is raised, Caucus / Debate, Resolution Drafting) just
+// rendered right before calling this -- every other phase calls this
+// with phaseQualifies=false, which hides both. Only ever shown to a
+// delegate actually representing a country (observers have nothing to
+// click), and only once there's actually something collecting
+// responses: an AI-run conference (chairIsAi) always collects them,
+// since the AI-auto-advance driver in committee-data.js is waiting on
+// them; a human-chaired conference only does once the Chair opens a
+// readiness check (see openReadinessCheck in committee-data.js and the
+// matching button in chair.js) -- clicking Proceed there never
+// advances anything by itself, it just shows up on the Chair's own
+// dashboard.
+function updateProceedUI(phaseQualifies, delegateRoles, readyCountries, chairIsAi, readyCheckOpen) {
+  const showPanel = phaseQualifies && (chairIsAi || readyCheckOpen) && Boolean(myAssignedCountry);
+  if (!showPanel) {
+    proceedButton.hidden = true;
+    proceedStatusEl.hidden = true;
+    return;
+  }
+
+  const ready = readyCountries ?? {};
+  const alreadyReady = ready[myAssignedCountry] === true;
+  const notReadyCountries = COMMITTEE_COUNTRIES.filter(
+    (country) => delegateRoles[country] === "human" && !ready[country],
+  );
+
+  proceedButton.hidden = alreadyReady;
+  proceedStatusEl.hidden = false;
+
+  if (alreadyReady) {
+    proceedStatusEl.textContent =
+      notReadyCountries.length > 0
+        ? `You're ready. Waiting on: ${notReadyCountries.join(", ")}.`
+        : chairIsAi
+          ? "Everyone's ready -- moving on shortly."
+          : "Everyone's ready -- waiting for the Chair to move things along.";
+  } else {
+    proceedStatusEl.textContent = chairIsAi
+      ? "Click Proceed once you're ready to move on."
+      : "The Chair opened a readiness check -- click Proceed once you're ready to move on.";
+  }
+}
+
 function renderCommitteeState(data) {
-  const { phaseIndex, delegateRoles, votes, rollCallVotes, topicId, topicVoteAnonymous, currentSpeakerIndex } = data;
+  const {
+    phaseIndex,
+    delegateRoles,
+    votes,
+    rollCallVotes,
+    topicId,
+    currentSpeakerIndex,
+    raisedMotion,
+    subStage,
+    pendingYieldRequest,
+    setupStage,
+    conferenceNumber,
+    delegateNames,
+    rosterLocked,
+    chairIsAi,
+    readyCountries,
+    readyCheckOpen,
+  } = data;
   const phaseName = COMMITTEE_PHASES[phaseIndex];
-  const isLastPhase = isSigningPhase(phaseIndex);
-  const onTopicPhase = isTopicPhase(phaseIndex);
-  const passingValue = isLastPhase ? "sign" : onTopicPhase ? "agree" : "yes";
-  const outcome = voteOutcome(votes, passingValue);
-  const sessionComplete = isLastPhase && outcome === "passed";
+  const sessionComplete = phaseIndex === CONFERENCE_RESULTS_PHASE_INDEX;
   const currentTopic = getTopic(topicId);
+
+  // The "Start Conference" card: once clicked, the button disappears
+  // for good and the status line explains what happened; the AI-run
+  // badge only ever shows once chairIsAi is also true. See
+  // lockRosterAndStart in committee-data.js for what set these fields,
+  // and chair.html's version of this same pattern.
+  delegateStartButton.hidden = rosterLocked === true;
+  if (rosterLocked) {
+    delegateStartStatusEl.textContent = chairIsAi
+      ? "Started -- the AI is running the Chair's side of things too."
+      : "Started -- registration is closed and every unclaimed seat is now an AI Delegate.";
+  }
+  delegateAiChairBadgeEl.hidden = !(rosterLocked && chairIsAi);
+
+  // Keeps the AI-auto-advance timer running exactly while it should be
+  // -- shared with chair.js so the same loop runs no matter which page
+  // happens to be open (see syncAiAutoAdvance in committee-data.js).
+  syncAiAutoAdvance(data);
+
+  // Hidden by default -- whichever of the four non-voting phases
+  // below actually applies overrides this with phaseQualifies=true
+  // right before it returns.
+  updateProceedUI(false, delegateRoles, readyCountries, chairIsAi, readyCheckOpen);
 
   if (lastAnnouncedPhaseIndex !== null && phaseIndex !== lastAnnouncedPhaseIndex) {
     showPhaseToast(`Now entering: ${phaseName}`);
@@ -752,24 +582,28 @@ function renderCommitteeState(data) {
 
   renderTimelineTable(phaseIndex, sessionComplete);
   renderRollCallChart(rollCallVotes);
-  renderYieldCard(phaseIndex, delegateRoles, currentSpeakerIndex ?? 0);
-  renderResolutionCard(phaseIndex);
+  renderYieldCard(phaseIndex, delegateRoles, currentSpeakerIndex ?? 0, pendingYieldRequest, data.delegateNames);
+  renderResolutionCard(phaseIndex, subStage);
   applyDelegateIdentityToUI();
 
-  // The committee topic banner at the top of the page: shows what's
-  // currently proposed while Setting the Agenda is underway, and what was
-  // adopted for the rest of the session once that vote passes.
+  // The committee topic banner at the top of the page.
   if (currentTopic) {
-    committeeTopicLabelEl.textContent = onTopicPhase ? "Proposed Topic" : "Topic";
+    committeeTopicLabelEl.textContent = "Topic";
     committeeTopicTextEl.textContent = `${currentTopic.name} \u2014 ${currentTopic.description}`;
   }
 
-  // The 60-second countdown only applies to Setting the Agenda -- every
-  // other phase has no time limit and can be reset manually instead.
-  updateTopicVoteTimerDisplay();
-
   phaseStepEl.textContent = `Phase ${phaseIndex + 1} of ${COMMITTEE_PHASES.length}`;
   phaseNameEl.textContent = phaseName;
+
+  // The welcome message only ever appears once the Chair has clicked
+  // "Start Conference & Give Instructions" and only while the
+  // goal-agreement poll it announces is still part of Conference
+  // Setup -- hidden the rest of the time.
+  const showWelcomeBanner = phaseIndex === SETUP_PHASE_INDEX && setupStage === SETUP_STAGE.GOAL_POLL && conferenceNumber != null;
+  conferenceWelcomeBannerEl.hidden = !showWelcomeBanner;
+  if (showWelcomeBanner) {
+    conferenceWelcomeBannerEl.textContent = conferenceWelcomeMessage(conferenceNumber);
+  }
 
   // Delegate list, with each country's role for this committee session.
   delegateList.replaceChildren(
@@ -780,7 +614,7 @@ function renderCommitteeState(data) {
 
       item.className = "delegate";
       role.className = "role";
-      name.textContent = country;
+      name.textContent = formatDelegateLabel(country, delegateNames);
       role.textContent = delegateRoles[country] === "ai" ? "AI Delegate" : "Human";
 
       item.append(name, role);
@@ -798,38 +632,145 @@ function renderCommitteeState(data) {
     }),
   );
 
-  // The session is fully finished once Signing (the last phase) has also
-  // passed by majority -- nothing left to vote on but a fresh restart.
+  // Only three phases ever show the vote panel (chart + per-country
+  // rows): Conference Setup's presence check, Motion Voting, and the
+  // final Sign/Not Sign/Abstain vote. Every other phase -- Opening
+  // Speeches, Motion Raising, Caucus / Debate, and the "drafting" half
+  // of Resolution / Final Vote -- hides it and shows its own status
+  // message instead; the Chair manually moves things along from those
+  // phases (see chair.js).
+  const onMotionRaising = phaseIndex === MOTION_RAISING_PHASE_INDEX;
+  motionPickerEl.hidden = !onMotionRaising;
+  motionButtons.forEach((button) => {
+    button.disabled = !myAssignedCountry;
+  });
+
   if (sessionComplete) {
-    voteQuestionEl.textContent = "This committee session is complete.";
+    const finalOutcome = voteOutcome(votes, "sign");
+    voteQuestionEl.textContent = "Conference Results";
     voteStatusChartEl.replaceChildren();
     voteRowsEl.replaceChildren();
-    voteStatusEl.textContent = "Every phase from Setting the Agenda through Signing has passed by majority vote.";
+    voteStatusEl.textContent =
+      `The session is complete. Topic: ${currentTopic ? currentTopic.name : "none"}. ` +
+      (finalOutcome === "passed"
+        ? "The resolution was signed and adopted by majority vote."
+        : "The final vote did not reach a majority -- the resolution was not adopted.");
     resetVoteButton.hidden = true;
     return;
   }
 
-  const nextPhaseName = COMMITTEE_PHASES[phaseIndex + 1];
-  if (onTopicPhase) {
-    voteQuestionEl.textContent = currentTopic
-      ? `Vote on whether to adopt "${currentTopic.name}" and begin debate:`
-      : "Vote on whether to adopt the proposed topic and begin debate:";
-  } else if (isSigningPhase(phaseIndex)) {
-    voteQuestionEl.textContent = "Vote on whether to sign this resolution into adoption:";
-  } else if (phaseIndex === PRESENCE_CHECK_PHASE_INDEX) {
-    voteQuestionEl.textContent = "Vote to confirm presence and proceed to the General Speakers List:";
-  } else {
-    voteQuestionEl.textContent = `Vote to proceed from ${phaseName} to ${nextPhaseName}:`;
+  if (phaseIndex === SETUP_PHASE_INDEX && setupStage === SETUP_STAGE.AWAITING_START) {
+    voteQuestionEl.textContent = "Conference Setup";
+    voteStatusChartEl.replaceChildren();
+    voteRowsEl.replaceChildren();
+    voteStatusEl.textContent = "Presence confirmed -- waiting for the Chair to start the conference.";
+    resetVoteButton.hidden = true;
+    return;
   }
 
-  // Setting the Agenda votes Agree/Disagree, Signing votes Sign/Not Sign/
-  // Abstain, and every other phase votes Yes/No.
-  const choiceOptions = onTopicPhase
-    ? ["agree", "disagree"]
-    : isSigningPhase(phaseIndex)
-      ? ["sign", "not_sign", "abstain"]
-      : ["yes", "no"];
-  const aiAutoChoice = onTopicPhase ? "agree" : isSigningPhase(phaseIndex) ? "sign" : "yes";
+  if (phaseIndex === OPENING_SPEECHES_PHASE_INDEX) {
+    voteQuestionEl.textContent = "Opening Speeches";
+    voteStatusChartEl.replaceChildren();
+    voteRowsEl.replaceChildren();
+    voteStatusEl.textContent =
+      "Delegates are giving their opening speeches -- the Chair will move on to Motion Raising when ready.";
+    resetVoteButton.hidden = true;
+    updateProceedUI(true, delegateRoles, readyCountries, chairIsAi, readyCheckOpen);
+    return;
+  }
+
+  if (onMotionRaising) {
+    voteQuestionEl.textContent = "Motion Raising";
+    voteStatusChartEl.replaceChildren();
+    voteRowsEl.replaceChildren();
+    voteStatusEl.textContent = raisedMotion
+      ? `${MOTION_TYPES[raisedMotion.type] ?? raisedMotion.type} raised by ${raisedMotion.raisedBy} -- waiting for the Chair to open the vote.`
+      : "Any delegate can propose a motion above for what the committee does next.";
+    resetVoteButton.hidden = true;
+    // Nothing to be "ready" for until a motion actually exists to vote
+    // on -- raising one isn't gated (see the AI-auto-advance driver in
+    // committee-data.js), only opening the vote on it is.
+    updateProceedUI(Boolean(raisedMotion), delegateRoles, readyCountries, chairIsAi, readyCheckOpen);
+    return;
+  }
+
+  if (phaseIndex === CAUCUS_DEBATE_PHASE_INDEX) {
+    voteQuestionEl.textContent = raisedMotion
+      ? `Caucus / Debate \u2014 debating under: ${MOTION_TYPES[raisedMotion.type] ?? raisedMotion.type}`
+      : "Caucus / Debate";
+    voteStatusChartEl.replaceChildren();
+    voteRowsEl.replaceChildren();
+    voteStatusEl.textContent =
+      "See the Queue Order panel to yield your speaking time -- the Chair will move the committee on to Resolution / Final Vote when ready.";
+    resetVoteButton.hidden = true;
+    updateProceedUI(true, delegateRoles, readyCountries, chairIsAi, readyCheckOpen);
+    return;
+  }
+
+  if (phaseIndex === RESOLUTION_VOTE_PHASE_INDEX && subStage === "drafting") {
+    voteQuestionEl.textContent = "Resolution / Final Vote \u2014 Drafting";
+    voteStatusChartEl.replaceChildren();
+    voteRowsEl.replaceChildren();
+    voteStatusEl.textContent = "Draft your resolution below -- the Chair will open the final vote when it's ready.";
+    resetVoteButton.hidden = true;
+    updateProceedUI(true, delegateRoles, readyCountries, chairIsAi, readyCheckOpen);
+    return;
+  }
+
+  // From here on, this phase actually holds a vote: Conference Setup's
+  // presence check, Motion Voting, or the final Sign/Not Sign/Abstain
+  // vote inside Resolution / Final Vote.
+  const passingValue = isFinalSigningVote(phaseIndex, subStage) ? "sign" : "yes";
+  const choiceOptions = isFinalSigningVote(phaseIndex, subStage) ? ["sign", "not_sign", "abstain"] : ["yes", "no"];
+  const aiAutoChoice = isFinalSigningVote(phaseIndex, subStage) ? "sign" : "yes";
+  const rawOutcome = voteOutcome(votes, passingValue);
+  // In an AI-run conference, outside Conference Setup, the AI-majority
+  // bloc alone almost always already reaches the threshold the instant
+  // the phase opens -- without this, this delegate's own vote buttons
+  // below would never even appear, since the branch right after this
+  // treats a math-only "passed" as if the whole vote were already
+  // over. castVote in committee-data.js already refuses to act on that
+  // on the backend (see canActOnOutcome there); this keeps the display
+  // honest about the same thing, by not treating the vote as decided
+  // on screen until this delegate has actually cast their own.
+  const humanStillNeedsToVote =
+    chairIsAi && phaseIndex !== SETUP_PHASE_INDEX && myAssignedCountry && votes[myAssignedCountry] == null;
+  const outcome = humanStillNeedsToVote ? "undecided" : rawOutcome;
+
+  if (phaseIndex === SETUP_PHASE_INDEX && setupStage === SETUP_STAGE.GOAL_POLL) {
+    voteQuestionEl.textContent = currentTopic
+      ? `Goal Agreement Poll — do you agree with the chosen goal: ${currentTopic.name}?`
+      : "Goal Agreement Poll — do you agree with the chosen goal?";
+  } else if (phaseIndex === SETUP_PHASE_INDEX) {
+    voteQuestionEl.textContent = "Vote to confirm presence:";
+  } else if (phaseIndex === MOTION_VOTING_PHASE_INDEX) {
+    voteQuestionEl.textContent = raisedMotion
+      ? `Vote on: ${MOTION_TYPES[raisedMotion.type] ?? raisedMotion.type}`
+      : "Vote on the raised motion:";
+  } else {
+    voteQuestionEl.textContent = "Vote on whether to sign this resolution into adoption:";
+  }
+
+  // Once a vote passes, delegates no longer get to see who voted for
+  // what -- hide the live breakdown (chart + per-country rows) right
+  // away and show a short "it passed" message instead. Firestore still
+  // keeps every individual vote, and the chair's own dashboard
+  // (chair.js) is untouched, so the chair can always see the full
+  // breakdown.
+  if (outcome === "passed") {
+    voteStatusChartEl.replaceChildren();
+    voteRowsEl.replaceChildren();
+    voteStatusEl.textContent =
+      phaseIndex === MOTION_VOTING_PHASE_INDEX
+        ? "This motion passed -- moving on to Caucus / Debate."
+        : phaseIndex === SETUP_PHASE_INDEX && setupStage === SETUP_STAGE.GOAL_POLL
+          ? "Agreement reached -- moving on to Opening Speeches."
+          : phaseIndex === SETUP_PHASE_INDEX
+            ? "Presence confirmed -- waiting for the Chair to start the conference."
+            : "This vote passed -- moving on to Conference Results.";
+    resetVoteButton.hidden = true;
+    return;
+  }
 
   renderVoteStatusChart(choiceOptions, votes);
 
@@ -840,16 +781,14 @@ function renderCommitteeState(data) {
       const status = document.createElement("span");
 
       row.className = "vote-row";
-      label.textContent = country;
+      label.textContent = formatDelegateLabel(country, delegateNames);
       status.className = "vote-choice";
 
       if (delegateRoles[country] === "ai") {
-        // During the Presence Check, an automatic Yes reads as "Present",
-        // matching real roll-call language -- every other phase shows the
-        // AI Delegate's automatic choice for that phase (Agree on Setting
-        // the Agenda, Sign on Signing).
+        // During Conference Setup, an AI Delegate's automatic Yes reads
+        // as "Present", matching real roll-call language.
         status.textContent =
-          phaseIndex === PRESENCE_CHECK_PHASE_INDEX
+          phaseIndex === SETUP_PHASE_INDEX && setupStage === SETUP_STAGE.ROLL_CALL
             ? "Present (AI, automatic)"
             : `${VOTE_CHOICE_LABELS[aiAutoChoice]} (AI, automatic)`;
         row.append(label, status);
@@ -858,11 +797,6 @@ function renderCommitteeState(data) {
 
       const currentVote = votes[country];
       if (currentVote) {
-        // A vote cast anonymously during Setting the Agenda hides which
-        // country it came from -- everyone else just sees "Anonymous
-        // Delegate" instead of the real country name.
-        const votedAnonymously = onTopicPhase && Boolean(topicVoteAnonymous?.[country]);
-        label.textContent = votedAnonymously ? "Anonymous Delegate" : country;
         status.textContent = `Voted: ${VOTE_CHOICE_LABELS[currentVote] ?? currentVote}`;
         row.append(label, status);
         return row;
@@ -885,41 +819,9 @@ function renderCommitteeState(data) {
         button.type = "button";
         button.className = `vote-button ${VOTE_CHOICE_BUTTON_CLASSES[choice]}`;
         button.textContent = VOTE_CHOICE_LABELS[choice];
-        if (onTopicPhase) {
-          button.addEventListener("click", () => {
-            const anonymousCheckbox = row.querySelector(".anonymous-checkbox");
-            // A visible pop-up naming the topic right as the vote is cast
-            // -- the topic banner at the top of the page can be easy to
-            // miss, so this makes sure whoever's voting knows exactly
-            // what they're voting on.
-            if (currentTopic) {
-              showPhaseToast(`Voting on: ${currentTopic.name} \u2014 ${currentTopic.description}`);
-            }
-            castTopicVote(country, choice, Boolean(anonymousCheckbox?.checked));
-          });
-        } else {
-          button.addEventListener("click", () => castVote(country, choice));
-        }
+        button.addEventListener("click", () => castVote(country, choice));
         buttonGroup.append(button);
       });
-
-      if (onTopicPhase) {
-        // Lets a delegate hide which country their vote came from --
-        // asked for up front, before the vote is cast.
-        const controls = document.createElement("div");
-        const anonymousLabel = document.createElement("label");
-        const anonymousCheckbox = document.createElement("input");
-
-        controls.className = "vote-topic-controls";
-        anonymousLabel.className = "anonymous-toggle";
-        anonymousCheckbox.type = "checkbox";
-        anonymousCheckbox.className = "anonymous-checkbox";
-        anonymousLabel.append(anonymousCheckbox, document.createTextNode(" Vote anonymously"));
-
-        controls.append(anonymousLabel, buttonGroup);
-        row.append(label, controls);
-        return row;
-      }
 
       row.append(label, buttonGroup);
       return row;
@@ -928,35 +830,42 @@ function renderCommitteeState(data) {
 
   const passCount = COMMITTEE_COUNTRIES.filter((country) => votes[country] === passingValue).length;
 
-  // Setting the Agenda never shows a manual Reset Vote button -- a failed
-  // or timed-out vote proposes a new topic automatically instead.
-  if (onTopicPhase) {
-    voteStatusEl.textContent =
-      outcome === "failed"
-        ? "This topic is no longer able to reach a majority -- the chair will propose a new topic automatically."
-        : `${passCount} of ${COMMITTEE_COUNTRIES.length} delegates have voted Agree. A majority (at least ${VOTE_THRESHOLD}) is needed to adopt this topic.`;
-    resetVoteButton.hidden = true;
-    return;
-  }
+  const onGoalPoll = phaseIndex === SETUP_PHASE_INDEX && setupStage === SETUP_STAGE.GOAL_POLL;
 
   if (outcome === "failed") {
-    const failMessage = isSigningPhase(phaseIndex)
-      ? `This resolution did not pass -- a majority (at least ${VOTE_THRESHOLD} of ${COMMITTEE_COUNTRIES.length}) voting Sign is required, and that's no longer possible with the votes already cast. Reset the vote to try again.`
-      : `This motion did not pass -- a majority (at least ${VOTE_THRESHOLD} of ${COMMITTEE_COUNTRIES.length}) is required, and that's no longer possible with the votes already cast. Reset the vote to try again.`;
+    const failMessage =
+      phaseIndex === MOTION_VOTING_PHASE_INDEX
+        ? `This motion did not pass -- a majority (at least ${VOTE_THRESHOLD} of ${COMMITTEE_COUNTRIES.length}) is required, and that's no longer possible with the votes already cast. Returning to Motion Raising.`
+        : onGoalPoll
+          ? `This goal-agreement poll did not pass -- a majority (at least ${VOTE_THRESHOLD} of ${COMMITTEE_COUNTRIES.length}) is required, and that's no longer possible with the votes already cast. The Chair needs to choose a different topic to reopen the poll.`
+          : isFinalSigningVote(phaseIndex, subStage)
+            ? `This resolution did not pass -- a majority (at least ${VOTE_THRESHOLD} of ${COMMITTEE_COUNTRIES.length}) voting Sign is required, and that's no longer possible with the votes already cast. Reset the vote to try again.`
+            : `This vote did not pass -- a majority (at least ${VOTE_THRESHOLD} of ${COMMITTEE_COUNTRIES.length}) is required, and that's no longer possible with the votes already cast. Reset the vote to try again.`;
     voteStatusEl.textContent = failMessage;
-    resetVoteButton.hidden = false;
+    // A failed Motion Voting vote already reverts to Motion Raising
+    // automatically in the same write that caused the failure (see
+    // castVote), and a failed goal-agreement poll recovers through the
+    // Chair picking a new topic (see chooseTopic in chair.js) rather
+    // than this button -- both stay hidden here, the rest fall back to
+    // the existing Reset Vote button.
+    resetVoteButton.hidden = phaseIndex === MOTION_VOTING_PHASE_INDEX || onGoalPoll;
   } else {
-    const pendingMessage = isSigningPhase(phaseIndex)
-      ? `${passCount} of ${COMMITTEE_COUNTRIES.length} delegates have voted Sign. A majority (at least ${VOTE_THRESHOLD}) is needed to adopt the resolution.`
-      : `${passCount} of ${COMMITTEE_COUNTRIES.length} delegates have voted Yes. A majority (at least ${VOTE_THRESHOLD}) is needed to proceed.`;
+    const pendingMessage =
+      onGoalPoll
+        ? `${passCount} of ${COMMITTEE_COUNTRIES.length} delegates agree with the goal. A majority (at least ${VOTE_THRESHOLD}) is needed to proceed.`
+        : phaseIndex === SETUP_PHASE_INDEX
+          ? `${passCount} of ${COMMITTEE_COUNTRIES.length} delegates have confirmed presence. A majority (at least ${VOTE_THRESHOLD}) is needed to proceed.`
+          : isFinalSigningVote(phaseIndex, subStage)
+            ? `${passCount} of ${COMMITTEE_COUNTRIES.length} delegates have voted Sign. A majority (at least ${VOTE_THRESHOLD}) is needed to adopt the resolution.`
+            : `${passCount} of ${COMMITTEE_COUNTRIES.length} delegates have voted Yes. A majority (at least ${VOTE_THRESHOLD}) is needed for this motion to pass.`;
     voteStatusEl.textContent = pendingMessage;
     resetVoteButton.hidden = true;
   }
 }
 
 // Renders a live bar chart of how the CURRENT vote is going: one bar per
-// choice available in this phase (Agree/Disagree, Yes/No, or Sign/Not
-// Sign/Abstain), plus a "Not Yet Voted" bar for anyone still pending.
+// choice available in this phase (Yes/No, or Sign/Not Sign/Abstain),
+// plus a "Not Yet Voted" bar for anyone still pending.
 // Re-runs every time anyone's vote changes, so it's always up to date.
 function renderVoteStatusChart(choiceOptions, votes) {
   const total = COMMITTEE_COUNTRIES.length;
@@ -1061,23 +970,100 @@ resetVoteButton.addEventListener("click", () => {
   resetCurrentVote().catch((error) => console.error("Unable to reset the vote:", error));
 });
 
-yieldButton.addEventListener("click", () => {
+// The Proceed / "I'm Ready" button's action -- see updateProceedUI
+// above and markReadyToProceed in committee-data.js. Disabled while
+// the write is in flight so a slow connection can't double-send it;
+// a successful write hides the button on the next render (see
+// updateProceedUI), so there's nothing further to do here on success.
+proceedButton.addEventListener("click", () => {
   if (!myAssignedCountry) {
     return;
   }
-  yieldButton.disabled = true;
-  yieldStatusEl.textContent = "Yielding…";
-  castYield(myAssignedCountry).catch((error) => {
-    console.error("Unable to yield:", error);
-    yieldStatusEl.textContent = "Could not yield -- check your connection and try again.";
-    yieldButton.disabled = false;
+  proceedButton.disabled = true;
+  markReadyToProceed(myAssignedCountry)
+    .catch((error) => {
+      console.error("Unable to mark ready to proceed:", error);
+      proceedStatusEl.hidden = false;
+      proceedStatusEl.textContent = "Could not send that -- check your connection and try again.";
+    })
+    .finally(() => {
+      proceedButton.disabled = false;
+    });
+});
+
+// The "Start Conference" button's action -- irreversible, so this
+// confirms first, same as the matching button on chair.html. Unlike
+// that one, starting from here always hands the Chair's side of
+// things to the AI (see lockRosterAndStart in committee-data.js),
+// since nobody reaching this page is signed in as Chair.
+delegateStartButton.addEventListener("click", () => {
+  const confirmed = window.confirm(
+    "Start the conference now? Nobody will be able to join with the meeting code after this, any country nobody has claimed yet becomes an AI Delegate, and the AI will run the Chair's side of things too since you're starting it from here. This can't be undone.",
+  );
+  if (!confirmed) {
+    return;
+  }
+
+  delegateStartButton.disabled = true;
+  delegateStartStatusEl.textContent = "Starting the conference…";
+  lockRosterAndStart({ initiatedByDelegate: true })
+    .then((result) => {
+      if (!result) {
+        // Already locked -- a double-click, or someone else (the
+        // owner, from chair.html) got there first. Leave the button
+        // disabled; renderCommitteeState will reflect the real state
+        // as soon as the snapshot arrives.
+        delegateStartStatusEl.textContent = "This conference has already been started.";
+        return;
+      }
+      delegateStartStatusEl.textContent =
+        "Started -- the AI is now running the rest of this conference, including the Chair's side of things.";
+    })
+    .catch((error) => {
+      console.error("Unable to start the conference:", error);
+      delegateStartStatusEl.textContent = "Could not start the conference -- check your connection and try again.";
+      delegateStartButton.disabled = false;
+    });
+});
+
+// Any delegate can raise either motion during Motion Raising -- see
+// castMotion. Disabled entirely for observers (no country to raise one
+// as), handled by the disabled state set in renderCommitteeState.
+motionButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    if (!myAssignedCountry) {
+      return;
+    }
+    castMotion(myAssignedCountry, button.dataset.motion).catch((error) => {
+      console.error("Unable to raise the motion:", error);
+    });
+  });
+});
+
+yieldForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  if (!myAssignedCountry) {
+    return;
+  }
+  const message = yieldMessageInput.value.trim();
+  if (!message) {
+    yieldStatusEl.textContent = "Please type a short message before sending your yield request.";
+    return;
+  }
+  yieldForm.querySelector("button").disabled = true;
+  yieldStatusEl.textContent = "Sending yield request…";
+  requestYield(myAssignedCountry, message).catch((error) => {
+    console.error("Unable to send the yield request:", error);
+    yieldStatusEl.textContent = "Could not send the yield request -- check your connection and try again.";
+    yieldForm.querySelector("button").disabled = false;
   });
 });
 
 
-// Sets up the shared committee session (creating it if this is the
-// first visitor ever), then claims this specific visitor's own country
-// seat. The committee/state listener below usually renders first with
+// Repairs this session's document if it predates a field this module
+// now expects (see ensureCommitteeState in committee-data.js), then
+// claims this specific visitor's own country seat. The committee/state
+// listener below usually renders first with
 // myAssignedCountry still undefined (showing no vote buttons yet) --
 // once the claim resolves, this re-renders immediately so the page
 // doesn't have to wait for some unrelated change to show it.
@@ -1214,7 +1200,7 @@ function createMessageCard({ country, delegateType, message, audioUrl }) {
   countryName.className = "message-country";
   type.className = "message-type";
   messageText.className = "message-text";
-  countryName.textContent = country;
+  countryName.textContent = formatDelegateLabel(country, latestCommitteeState?.delegateNames);
   type.textContent = delegateType;
   messageText.textContent = `“${message}”`;
 

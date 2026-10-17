@@ -127,6 +127,36 @@
         box-shadow: inset 0 0 0 28px rgb(255 255 255 / 4%);
       }
 
+      /* The meeting code, shown right under the committee title so a
+         delegate can see and share it before clicking "Start
+         Conference" below -- same idea as chair.html's version of
+         this banner, just colored for this card's dark background. */
+      .session-code-banner {
+        margin: 14px 0 0;
+        padding: 10px 16px;
+        display: inline-flex;
+        align-items: baseline;
+        gap: 10px;
+        background: rgb(255 255 255 / 12%);
+        border: 1px solid rgb(255 255 255 / 25%);
+        border-radius: 8px;
+      }
+
+      .session-code-label {
+        color: rgb(255 255 255 / 70%);
+        font-size: 0.8rem;
+        font-weight: bold;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+
+      .session-code {
+        color: #ffffff;
+        font-size: 1.4rem;
+        font-weight: bold;
+        letter-spacing: 0.12em;
+      }
+
       h1,
       h2,
       p {
@@ -242,33 +272,31 @@
         background: #3f4b60;
       }
 
-      /* The 60-second Setting the Agenda countdown -- a warmer color than
-         the other labels so it reads as time-sensitive. */
-      .topic-vote-timer {
-        color: #b3261e;
+      /* The two motion buttons shown during Motion Raising. */
+      .motion-picker {
+        display: grid;
+        gap: 10px;
+        margin: 10px 0 16px;
       }
 
-      /* Wraps the "vote anonymously" checkbox above the Agree/Disagree
-         buttons during Setting the Agenda. */
-      .vote-topic-controls {
-        display: flex;
-        flex-direction: column;
-        align-items: flex-end;
-        gap: 6px;
-      }
-
-      .anonymous-toggle {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        color: #5a6780;
-        font-size: 0.8rem;
+      .motion-button {
+        padding: 11px 16px;
+        color: #1f4b99;
+        background: #eef3fb;
+        border: 1px solid #c7d5ea;
+        border-radius: 7px;
+        font: inherit;
+        font-weight: bold;
         cursor: pointer;
       }
 
-      .anonymous-toggle input {
-        margin: 0;
-        cursor: pointer;
+      .motion-button:not(:disabled):hover {
+        background: #dde8f8;
+      }
+
+      .motion-button:disabled {
+        cursor: not-allowed;
+        opacity: 0.65;
       }
 
       .procedure-actions {
@@ -358,6 +386,19 @@
         transform: translate(-50%, 0);
       }
 
+      /* The one-time welcome message shown once the Chair starts the
+         conference -- a highlighted callout rather than plain text, so
+         it stands out from the regular procedure status line below it. */
+      .conference-welcome-banner {
+        margin: 0 0 14px;
+        padding: 14px 16px;
+        background: #eef4ff;
+        border: 1px solid #c3d6f5;
+        border-radius: 8px;
+        color: #0b2347;
+        font-weight: bold;
+      }
+
       /* Shared bar-chart styling for both the Roll Call Results chart
          (Voting / Not Voting) and the live Vote Status chart (one bar
          per vote choice, plus Not Yet Voted): a track, a colored fill
@@ -440,9 +481,17 @@
         font-size: 0.92rem;
       }
 
-      /* The Yield Time speaking order -- same row look as the delegate
-         list, but the delegate currently holding the floor is picked
-         out with a highlighted border. */
+      /* The form a speaker uses to send the Chair a written yield
+         request during Caucus / Debate. */
+      .yield-form {
+        display: grid;
+        gap: 10px;
+        margin-bottom: 12px;
+      }
+
+      /* The Caucus / Debate speaking order -- same row look as the
+         delegate list, but the delegate currently holding the floor is
+         picked out with a highlighted border. */
       .yield-order-list {
         display: grid;
         gap: 10px;
@@ -635,8 +684,8 @@
 
       /* The shared draft resolution needs more room than the message
          box, and shows a clearly different, non-interactive look once
-         it's locked (outside Moderated Caucus / Unmoderated Caucus /
-         Drafting Solutions). */
+         it's locked (outside Caucus / Debate and Resolution / Final
+         Vote's drafting round). */
       .resolution-textarea {
         min-height: 260px;
         font-family: "Georgia", "Times New Roman", serif;
@@ -662,6 +711,28 @@
         margin: 0;
         color: #52617c;
         font-size: 0.9rem;
+      }
+
+      /* The "Start Conference" card below (between the committee title
+         and Committee Procedure) and its AI-run status badge -- same
+         idea as chair.html's version of these, since a lone delegate
+         can use this exactly like the Chair would. */
+      .roster-lock-hint {
+        margin: 0 0 14px;
+        color: #52617c;
+        font-size: 0.9rem;
+        line-height: 1.5;
+      }
+
+      .ai-chair-badge {
+        padding: 14px 16px;
+        margin-top: 14px;
+        color: #14532d;
+        background: #eaf7ee;
+        border: 1px solid #bfe3c9;
+        border-radius: 10px;
+        font-size: 0.9rem;
+        line-height: 1.5;
       }
 
       /* Creates a small, clear path to the feedback page at the page bottom. */
@@ -726,35 +797,102 @@
           <section class="card committee-hero" aria-labelledby="committee-name">
         <p class="label">Committee</p>
         <h1 id="committee-name">UN Sustainable Development Committee</h1>
-        <!-- The topic itself is now chosen by a live Setting the Agenda
-             vote (see committee.js), so this label and text are filled
-             in dynamically -- with whatever topic is currently proposed
-             or, once that vote passes, whichever one was adopted. -->
+        <!-- Shown as soon as the page loads (this visitor already has
+             the code -- it's how they got here), so it's visible well
+             before the "Start Conference" card below. See committee.js,
+             which fills this in from the same code saved in
+             localStorage that got this visitor onto this page. -->
+        <p class="session-code-banner">
+          <span class="session-code-label">Meeting Code</span>
+          <span class="session-code" id="delegate-session-code"></span>
+        </p>
+        <!-- The topic is set up during Conference Setup (see
+             committee.js), so this label and text are filled in
+             dynamically with whatever topic the chair has chosen. -->
         <p class="label" id="committee-topic-label">Topic</p>
         <p class="topic" id="committee-topic-text">Waiting for the chair to propose a topic…</p>
       </section>
 
-      <!-- Tracks the committee through the real MUN procedure (Presence
-           Check through Signing) and lets delegates vote Yes/No -- no
-           abstaining -- to move to the next phase. Shared live across
-           every visitor through Firestore; see committee.js. -->
+      <!-- Lets a delegate start the conference themselves if nobody
+           else ever comes in with the meeting code -- BridgeMUN is
+           built so a student can experience a full MUN committee
+           entirely on their own. Any country nobody has claimed
+           becomes an AI Delegate, and since nobody is signed in as
+           Chair on this page, the AI always drives the Chair's side
+           of things too once this is clicked (see lockRosterAndStart
+           and the AI-auto-advance driver, both in committee-data.js).
+           Hidden once rosterLocked is true, same as chair.html's
+           version of this button. -->
+      <section class="card" id="delegate-start-section" aria-labelledby="delegate-start-heading">
+        <h2 id="delegate-start-heading">Start Conference</h2>
+        <p class="roster-lock-hint">
+          No chair required -- if you start the conference from here, the AI runs the
+          Chair's side of things too, so you can experience the whole committee on your
+          own. Once you click Start, nobody new can join with the meeting code anymore,
+          and any country nobody has claimed yet will be played by an AI Delegate.
+        </p>
+        <button class="primary-button" id="delegate-start-button" type="button">Start Conference</button>
+        <p class="form-status" id="delegate-start-status" aria-live="polite"></p>
+        <!-- Shown once rosterLocked is true and chairIsAi is also true
+             -- see renderCommitteeState in committee.js. -->
+        <p class="ai-chair-badge" id="delegate-ai-chair-badge" hidden>
+          This conference is fully AI-run -- the dashboard will run the rest of the
+          conference by itself for as long as this tab stays open.
+        </p>
+      </section>
+
+      <!-- Tracks the committee through the 7-stage MUN procedure
+           (Conference Setup through Conference Results) -- only three
+           phases actually hold a delegate vote, the rest advance when
+           the Chair moves things along. Shared live across every
+           visitor through Firestore; see committee.js. -->
       <section class="card" aria-labelledby="procedure-heading">
         <h2 id="procedure-heading">Committee Procedure</h2>
-        <p class="label" id="phase-step">Phase 1 of 8</p>
-        <p class="phase-name" id="phase-name">Setting the Agenda</p>
-        <!-- Only shown during Setting the Agenda -- the 60-second
-             countdown for the topic vote. Filled in and ticked every
-             second by committee.js. -->
-        <p class="label topic-vote-timer" id="topic-vote-timer" hidden></p>
+        <p class="label" id="phase-step">Phase 1 of 7</p>
+        <p class="phase-name" id="phase-name">Conference Setup</p>
+        <!-- Only shown once the Chair clicks "Start Conference & Give
+             Instructions" -- the exact welcome message every delegate
+             sees, including the goal-agreement poll it's about to open.
+             Filled in by committee.js. -->
+        <p class="conference-welcome-banner" id="conference-welcome-banner" hidden></p>
         <p class="vote-question" id="vote-question"></p>
-        <!-- Live bar chart of how the current vote is going -- one bar
-             per possible choice plus "Not Yet Voted", updating as soon
-             as anyone votes. Filled in by committee.js. -->
-        <p class="label">Live Vote Status</p>
-        <div class="roll-call-chart" id="vote-status-chart"></div>
-        <div class="vote-rows" id="vote-rows"></div>
+        <!-- Only shown during Motion Raising -- any delegate can
+             propose either motion below. Filled in by committee.js. -->
+        <div class="motion-picker" id="motion-picker" hidden>
+          <button class="motion-button" type="button" data-motion="moderated_caucus">
+            Motion for a Moderated Caucus
+          </button>
+          <button class="motion-button" type="button" data-motion="unmoderated_caucus">
+            Motion for an Unmoderated Caucus
+          </button>
+        </div>
+        <!-- Only shown while this phase actually holds a vote
+             (Conference Setup's presence check, Motion Voting, or the
+             final Sign/Not Sign/Abstain vote) -- a live bar chart of how
+             it's going, one bar per possible choice plus "Not Yet
+             Voted", updating as soon as anyone votes. Filled in by
+             committee.js. -->
+        <div id="vote-panel">
+          <p class="label">Live Vote Status</p>
+          <div class="roll-call-chart" id="vote-status-chart"></div>
+          <div class="vote-rows" id="vote-rows"></div>
+        </div>
         <p class="form-status" id="vote-status" aria-live="polite"></p>
         <div class="procedure-actions">
+          <!-- Shown during the phases that don't hold a vote of their
+               own -- Opening Speeches, Motion Raising once a motion is
+               raised, Caucus / Debate, and Resolution Drafting -- since
+               there's nothing else here to click. In an AI-run
+               conference, every human-run delegate has to click this
+               before the conference moves on (see markReadyToProceed
+               and allHumanDelegatesReady in committee-data.js); in a
+               human-chaired conference it only appears once the Chair
+               opens a readiness check, and is purely informational for
+               the Chair -- see renderCommitteeState in committee.js. -->
+          <button class="secondary-button" id="proceed-button" type="button" hidden>
+            Proceed / I'm Ready
+          </button>
+          <p class="form-status" id="proceed-status" aria-live="polite" hidden></p>
           <button class="secondary-button" id="reset-vote-button" type="button" hidden>
             Reset Vote
           </button>
@@ -762,12 +900,12 @@
       </section>
 
       <!-- The shared draft resolution: every delegate editing this page
-           can write here together during Moderated Caucus, Unmoderated
-           Caucus, and Drafting Solutions. Hidden until Moderated Caucus
-           begins, then stays visible (read-only) through Signing so
-           delegates can review exactly what they're voting to sign.
-           Shared live across every visitor through Firestore; see
-           committee.js. -->
+           can write here together during Caucus / Debate and the
+           drafting round of Resolution / Final Vote. Hidden until
+           Caucus / Debate begins, then stays visible (read-only) once
+           the final vote opens so delegates can review exactly what
+           they're voting to sign. Shared live across every visitor
+           through Firestore; see committee.js. -->
       <section class="card" id="resolution-card" aria-labelledby="resolution-heading" hidden>
         <h2 id="resolution-heading">Draft Resolution</h2>
         <p class="label" id="resolution-hint"></p>
@@ -781,9 +919,10 @@
         <p class="form-status" id="resolution-status" aria-live="polite"></p>
       </section>
 
-      <!-- Shows the Presence Check (roll call) outcome as a bar chart once
-           that first vote has passed -- who ended up Voting vs Not Voting.
-           Hidden until then; filled in by committee.js. -->
+      <!-- Shows the Conference Setup presence check (roll call) outcome
+           as a bar chart once that vote has passed -- who ended up
+           Voting vs Not Voting. Hidden until then; filled in by
+           committee.js. -->
       <section class="card" id="roll-call-card" aria-labelledby="roll-call-heading" hidden>
         <h2 id="roll-call-heading">Roll Call Results</h2>
         <div class="roll-call-chart" id="roll-call-chart"></div>
@@ -848,19 +987,22 @@
         </div>
 
         <aside class="layout-sidebar">
-        <!-- Queue Order: shown only during Yield Time. One delegate at a
-             time has the floor and can yield their remaining time to the
-             Chair, which hands the floor to the next human delegate (AI
-             Delegates are skipped automatically) -- everyone else sees
-             exactly which position they're in, so it's clear who's
-             speaking now and when their own turn will come. Shared live
-             across every visitor through Firestore; see committee.js. -->
+        <!-- Queue Order: shown only during Caucus / Debate. One
+             delegate at a time has the floor; to give it up, they send
+             the Chair a written yield request, which the Chair approves
+             from the chair dashboard before the floor actually moves to
+             the next human delegate (AI Delegates are skipped
+             automatically) -- everyone else sees exactly which position
+             they're in, so it's clear who's speaking now and when their
+             own turn will come. Shared live across every visitor
+             through Firestore; see committee.js. -->
         <section class="card" id="yield-card" aria-labelledby="yield-heading" hidden>
           <h2 id="yield-heading">Queue Order</h2>
           <ul class="yield-order-list" id="yield-order-list"></ul>
-          <button class="primary-button" id="yield-button" type="button" hidden>
-            Yield to the Chair
-          </button>
+          <form class="yield-form" id="yield-form" hidden>
+            <textarea id="yield-message" rows="2" maxlength="300"></textarea>
+            <button class="primary-button" type="submit">Send Yield Request</button>
+          </form>
           <p class="form-status" id="yield-status" aria-live="polite"></p>
         </section>
 

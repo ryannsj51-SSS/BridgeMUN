@@ -9,26 +9,25 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    // True only for the one Google account allowed to run a committee --
-    // anonymous delegates have no email claim at all, so this is never
-    // true for them. Mirrors isChairEmail in firebase.js.
-    function isChair() {
-      return signedIn() && request.auth.token.email == 'sjsjsjrl05@gmail.com';
-    }
-
     function shortText(value, maximumLength) {
       return value is string && value.size() > 0 && value.size() <= maximumLength;
     }
 
-    // Points at whichever session is the chair's current live meeting --
-    // read by everyone (a delegate's typed code is checked against this),
-    // written only by the chair (starting or resetting a session is the
-    // only thing that should ever change which code is "active").
-    match /appState/activeSession {
+    // The running count of every conference anyone on this site has
+    // ever started, across every owner -- never reset by Reset
+    // Committee Session, unlike everything under sessions/{code}.
+    // Bumped once, by whoever owns the conference, each time "Start
+    // Conference & Give Instructions" is clicked (see
+    // startConferenceAndAnnounce in committee-data.js). Any signed-in
+    // account may bump it, same as every other chair-only action in
+    // this file -- see the comment on sessions/{code}/committee/state
+    // below for why this stays client-gated rather than server-checked.
+    match /appState/conferenceStats {
       allow read: if true;
-      allow write: if isChair()
-        && request.resource.data.keys().hasOnly(['code', 'updatedAt'])
-        && request.resource.data.code.matches('^[0-9]{6}$')
+      allow write: if signedIn()
+        && request.resource.data.keys().hasOnly(['totalConferences', 'updatedAt'])
+        && request.resource.data.totalConferences is int
+        && request.resource.data.totalConferences >= 1
         && request.resource.data.updatedAt == request.time;
     }
 
@@ -60,25 +59,37 @@ service cloud.firestore {
           && request.resource.data.createdAt == request.time;
       }
 
-      // Tracks this session's live procedure state: which MUN phase it's
-      // on (Setting the Agenda through Signing), the topic the chair
-      // proposed or adopted, and each delegate's vote to move to the
-      // next phase. One shared document per session, read by every
-      // visitor in that session.
+      // Tracks this session's live procedure state: which of the 7
+      // stages it's on (Conference Setup through Conference Results),
+      // the topic the chair set up, whichever motion is currently
+      // raised, the drafting/voting sub-stage inside Resolution / Final
+      // Vote, and each delegate's vote. One shared document per
+      // session, read by every visitor in that session.
       match /committee/state {
         allow read: if true;
+        // Every chair-only action in this file (this doc included) is
+        // gated client-side, not by a server-side role check -- the
+        // chair dashboard is simply unreachable without knowing a
+        // conference's code AND being its owner (see chair.js), the
+        // same trust model this file has always used. ownerUid itself
+        // is still validated as a real, non-empty uid below so a
+        // malformed write can't corrupt it.
         allow write: if signedIn()
           && request.resource.data.keys().hasOnly([
-            'phaseIndex', 'delegateRoles', 'votes', 'topicId',
-            'topicVoteAnonymous', 'topicVoteDeadlineMs', 'rollCallVotes',
-            'delegateAssignments', 'currentSpeakerIndex', 'updatedAt'
+            'ownerUid',
+            'phaseIndex', 'delegateRoles', 'votes', 'topicId', 'rollCallVotes',
+            'raisedMotion', 'subStage', 'pendingYieldRequest',
+            'setupStage', 'conferenceNumber',
+            'delegateAssignments', 'delegateNames', 'currentSpeakerIndex', 'updatedAt',
+            'rosterLocked', 'chairIsAi', 'topicConfirmedByChair',
+            'readyCountries', 'readyCheckOpen'
           ])
+          && request.resource.data.ownerUid is string
+          && request.resource.data.ownerUid.size() > 0
           && request.resource.data.phaseIndex is int
           && request.resource.data.phaseIndex >= 0
-          && request.resource.data.phaseIndex <= 7
-          && request.resource.data.delegateRoles.keys().hasOnly([
-            'United States', 'Philippines', 'Netherlands', 'China', 'Brazil', 'India', 'Nigeria'
-          ])
+          && request.resource.data.phaseIndex <= 6
+          && request.resource.data.delegateRoles.keys().hasOnly(['United States', 'Philippines', 'Netherlands', 'China', 'Brazil', 'India', 'Nigeria'])
           && request.resource.data.delegateRoles['United States'] in ['ai', 'human']
           && request.resource.data.delegateRoles['Philippines'] in ['ai', 'human']
           && request.resource.data.delegateRoles['Netherlands'] in ['ai', 'human']
@@ -86,37 +97,25 @@ service cloud.firestore {
           && request.resource.data.delegateRoles['Brazil'] in ['ai', 'human']
           && request.resource.data.delegateRoles['India'] in ['ai', 'human']
           && request.resource.data.delegateRoles['Nigeria'] in ['ai', 'human']
-          && request.resource.data.votes.keys().hasOnly([
-            'United States', 'Philippines', 'Netherlands', 'China', 'Brazil', 'India', 'Nigeria'
-          ])
-          // Every phase votes yes/no except Setting the Agenda (agree/
-          // disagree) and Signing (sign/not_sign/abstain) -- allow every
-          // value here since one shared document covers every phase.
-          && request.resource.data.votes['United States'] in [null, 'yes', 'no', 'sign', 'not_sign', 'abstain', 'agree', 'disagree']
-          && request.resource.data.votes['Philippines'] in [null, 'yes', 'no', 'sign', 'not_sign', 'abstain', 'agree', 'disagree']
-          && request.resource.data.votes['Netherlands'] in [null, 'yes', 'no', 'sign', 'not_sign', 'abstain', 'agree', 'disagree']
-          && request.resource.data.votes['China'] in [null, 'yes', 'no', 'sign', 'not_sign', 'abstain', 'agree', 'disagree']
-          && request.resource.data.votes['Brazil'] in [null, 'yes', 'no', 'sign', 'not_sign', 'abstain', 'agree', 'disagree']
-          && request.resource.data.votes['India'] in [null, 'yes', 'no', 'sign', 'not_sign', 'abstain', 'agree', 'disagree']
-          && request.resource.data.votes['Nigeria'] in [null, 'yes', 'no', 'sign', 'not_sign', 'abstain', 'agree', 'disagree']
-          // The topic the chair proposed for Setting the Agenda -- one of
-          // the five SDG topics this committee can be assigned.
+          && request.resource.data.votes.keys().hasOnly(['United States', 'Philippines', 'Netherlands', 'China', 'Brazil', 'India', 'Nigeria'])
+          // Every vote is yes/no except the final vote inside
+          // Resolution / Final Vote (sign/not_sign/abstain) -- allow
+          // every value here since one shared document covers every
+          // phase.
+          && request.resource.data.votes['United States'] in [null, 'yes', 'no', 'sign', 'not_sign', 'abstain']
+          && request.resource.data.votes['Philippines'] in [null, 'yes', 'no', 'sign', 'not_sign', 'abstain']
+          && request.resource.data.votes['Netherlands'] in [null, 'yes', 'no', 'sign', 'not_sign', 'abstain']
+          && request.resource.data.votes['China'] in [null, 'yes', 'no', 'sign', 'not_sign', 'abstain']
+          && request.resource.data.votes['Brazil'] in [null, 'yes', 'no', 'sign', 'not_sign', 'abstain']
+          && request.resource.data.votes['India'] in [null, 'yes', 'no', 'sign', 'not_sign', 'abstain']
+          && request.resource.data.votes['Nigeria'] in [null, 'yes', 'no', 'sign', 'not_sign', 'abstain']
+          // The topic the chair set up during Conference Setup -- one
+          // of the five SDG topics this committee can be assigned.
           && request.resource.data.topicId in ['sdg14', 'sdg13', 'sdg6', 'sdg7', 'sdg12']
-          // Which delegates chose to vote anonymously on the topic -- a
-          // partial map is normal (most countries haven't voted yet).
-          && request.resource.data.topicVoteAnonymous.keys().hasOnly([
-            'United States', 'Philippines', 'Netherlands', 'China', 'Brazil', 'India', 'Nigeria'
-          ])
-          // When the 60-second topic vote window closes, as a plain
-          // millisecond timestamp (kept simple rather than a server
-          // timestamp so every visitor's browser can count it down live).
-          && request.resource.data.topicVoteDeadlineMs is number
           && (
             request.resource.data.rollCallVotes == null
             || (
-              request.resource.data.rollCallVotes.keys().hasOnly([
-                'United States', 'Philippines', 'Netherlands', 'China', 'Brazil', 'India', 'Nigeria'
-              ])
+              request.resource.data.rollCallVotes.keys().hasOnly(['United States', 'Philippines', 'Netherlands', 'China', 'Brazil', 'India', 'Nigeria'])
               && request.resource.data.rollCallVotes['United States'] in ['yes', 'no']
               && request.resource.data.rollCallVotes['Philippines'] in ['yes', 'no']
               && request.resource.data.rollCallVotes['Netherlands'] in ['yes', 'no']
@@ -126,28 +125,107 @@ service cloud.firestore {
               && request.resource.data.rollCallVotes['Nigeria'] in ['yes', 'no']
             )
           )
+          // Whichever motion is currently raised during Motion Raising
+          // / Motion Voting -- null once none has been raised yet (or
+          // after one fails or the committee moves on).
+          && (
+            request.resource.data.raisedMotion == null
+            || (
+              request.resource.data.raisedMotion.keys().hasOnly(['type', 'raisedBy'])
+              && request.resource.data.raisedMotion.type in ['moderated_caucus', 'unmoderated_caucus']
+              && request.resource.data.raisedMotion.raisedBy in ['United States', 'Philippines', 'Netherlands', 'China', 'Brazil', 'India', 'Nigeria']
+            )
+          )
+          // Only meaningful inside Resolution / Final Vote (drafting
+          // the resolution vs. the final vote actually being open), but
+          // always present so every write to this document stays valid.
+          && request.resource.data.subStage in ['drafting', 'voting']
+          // Whichever delegate's request to yield the floor is waiting
+          // on the Chair to approve it -- null once there isn't one.
+          && (
+            request.resource.data.pendingYieldRequest == null
+            || (
+              request.resource.data.pendingYieldRequest.keys().hasOnly(['country', 'message'])
+              && request.resource.data.pendingYieldRequest.country in ['United States', 'Philippines', 'Netherlands', 'China', 'Brazil', 'India', 'Nigeria']
+              && shortText(request.resource.data.pendingYieldRequest.message, 300)
+            )
+          )
+          // Conference Setup's own three-step sub-state (roll call,
+          // waiting on the Chair to start the conference, then the
+          // goal-agreement poll), and the running conference number the
+          // welcome message shows once that poll opens -- see
+          // SETUP_STAGE and startConferenceAndAnnounce in
+          // committee-data.js.
+          && request.resource.data.setupStage in ['roll_call', 'awaiting_start', 'goal_poll']
+          && (
+            request.resource.data.conferenceNumber == null
+            || (request.resource.data.conferenceNumber is int && request.resource.data.conferenceNumber >= 1)
+          )
           // Which visitor (by uid) is representing which country this
           // session -- see the comment above for why this can't be
           // validated as exhaustively as the other fields here.
           && request.resource.data.delegateAssignments is map
           && request.resource.data.delegateAssignments.size() <= 7
-          // Which country currently has the floor during Yield Time, as
-          // an index into the same fixed seven-country order used
-          // everywhere else -- 7 (one past the last country) means every
-          // human delegate has already had a turn.
+          // The free-text display name each human delegate typed for
+          // themselves when they claimed a country on the lobby page
+          // (keyed by country, e.g. {"United States": "Ryan"}), shown
+          // everywhere that country appears as "COUNTRY(Name)" -- see
+          // claimDelegateSeat and formatDelegateLabel in
+          // committee-data.js. Loosely validated the same way as
+          // delegateAssignments above, for the same reason.
+          && request.resource.data.delegateNames is map
+          && request.resource.data.delegateNames.size() <= 7
+          // Which country currently has the floor during Caucus /
+          // Debate, as an index into the same fixed seven-country order
+          // used everywhere else -- 7 (one past the last country) means
+          // every human delegate has already had a turn.
           && request.resource.data.currentSpeakerIndex is int
           && request.resource.data.currentSpeakerIndex >= 0
           && request.resource.data.currentSpeakerIndex <= 7
+          // The Start-Conference roster lock (see lockRosterAndStart in
+          // committee-data.js): rosterLocked closes registration for
+          // good, chairIsAi marks that nobody joined before it was
+          // clicked (so the Chair dashboard itself has to be driven by
+          // the auto-advance loop), and topicConfirmedByChair is what
+          // tells that loop it's safe to start advancing -- set the
+          // moment the Chair (human or AI) picks a topic (see
+          // chooseTopic in chair.js).
+          && request.resource.data.rosterLocked is bool
+          && request.resource.data.chairIsAi is bool
+          && request.resource.data.topicConfirmedByChair is bool
+          // Which human-run countries have clicked "Proceed" / "I'm
+          // Ready" for the CURRENT phase (see markReadyToProceed in
+          // committee-data.js), and whether the Chair has a readiness
+          // check open for delegates to respond to right now (see
+          // openReadinessCheck) -- both cleared back to {} / false
+          // every time the phase actually changes. Loosely validated
+          // the same way as delegateAssignments above, for the same
+          // reason.
+          && request.resource.data.readyCountries is map
+          && request.resource.data.readyCountries.size() <= 7
+          && request.resource.data.readyCheckOpen is bool
+          // Defense in depth: once the roster is locked, delegateAssignments
+          // can never grow, no matter what a bypassed client sends --
+          // claimDelegateSeat already refuses this in committee-data.js,
+          // but this rule keeps it true even if that check is skipped.
+          // resource == null means this write is creating the document
+          // for the first time (see createOwnedConference), which can
+          // never already be locked, so only an update needs this check.
+          && (
+            resource == null
+            || resource.data.rosterLocked != true
+            || request.resource.data.delegateAssignments == resource.data.delegateAssignments
+          )
           && request.resource.data.updatedAt == request.time;
       }
 
       // The shared draft resolution delegates write together. A separate
       // document from committee/state so a few keystrokes of text never
-      // collide with phase/vote updates. Writable only while the session
-      // is on Moderated Caucus, Unmoderated Caucus, or Drafting Solutions
-      // (phase indexes 4-6) -- checked here server-side, not just hidden
-      // in the page, so it stays locked during Signing even if someone
-      // bypasses the UI.
+      // collide with phase/vote updates. Writable only during Caucus /
+      // Debate (phase index 4) and the "drafting" half of Resolution /
+      // Final Vote (phase index 5, subStage "drafting") -- checked here
+      // server-side, not just hidden in the page, so it stays locked
+      // once the final vote opens even if someone bypasses the UI.
       match /committee/resolution {
         allow read: if true;
         allow write: if signedIn()
@@ -155,13 +233,19 @@ service cloud.firestore {
           && request.resource.data.text is string
           && request.resource.data.text.size() <= 20000
           && request.resource.data.updatedAt == request.time
-          && get(/databases/$(database)/documents/sessions/$(code)/committee/state).data.phaseIndex in [4, 5, 6];
+          && (
+            get(/databases/$(database)/documents/sessions/$(code)/committee/state).data.phaseIndex == 4
+            || (
+              get(/databases/$(database)/documents/sessions/$(code)/committee/state).data.phaseIndex == 5
+              && get(/databases/$(database)/documents/sessions/$(code)/committee/state).data.subStage == 'drafting'
+            )
+          );
       }
 
       // A silent, append-only record of what happened during this
-      // session (votes, phase changes, AI speeches, messages) for later
-      // review only -- nothing on the page itself reads from this
-      // collection.
+      // session (votes, phase changes, motions, AI speeches, messages)
+      // for later review only -- nothing on the page itself reads from
+      // this collection.
       match /activityLog/{logId} {
         allow read: if true;
         allow create: if signedIn()
@@ -169,9 +253,10 @@ service cloud.firestore {
           && request.resource.data.type in [
             'vote_cast', 'phase_advanced', 'roll_call_completed', 'vote_reset',
             'session_reset', 'session_complete', 'speech_requested',
-            'speech_ready', 'speech_played', 'message_sent', 'topic_vote_cast',
-            'topic_adopted', 'topic_reproposed', 'topic_chosen_by_chair',
-            'yield_cast'
+            'speech_ready', 'speech_played', 'message_sent',
+            'topic_chosen_by_chair', 'motion_raised', 'motion_vote_opened',
+            'yield_requested', 'yield_approved', 'final_vote_opened',
+            'conference_started'
           ]
           && (request.resource.data.country == null || shortText(request.resource.data.country, 50))
           && shortText(request.resource.data.detail, 300)
